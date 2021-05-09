@@ -38,15 +38,21 @@ class WordPicker:
 
     def pick_random_unique(self, max_length = 10):
         picked = self.unique_words[0]
-        while picked not in self.picked_words and len(picked) > max_length:
+        while picked in self.picked_words or len(picked) > max_length:
             rand_int = random.randint(0, len(self.unique_words) - 1)
             picked = self.unique_words[rand_int]
+        self.picked_words.add(picked)
         return picked
 
+    def pick_word_with_character(self, char, max_length = 10):
+        picked = self.pick_random_unique(max_length)
+        while char not in picked:
+            picked = self.pick_random_unique(max_length)
+        return picked
 
 class WordOrientation:
-    Vertical = 1
-    Horizontal = 2
+    Vertical = "vertical"
+    Horizontal = "horizontal"
 
 @dataclass
 class WordInGrid:
@@ -72,6 +78,10 @@ class Grid:
         row = self.grid[y]
         for idx, w in enumerate(word):
             row[x + idx] = w
+
+    def insert_vertical_word_at_pos(self, word, x, y):
+        for idx, w in enumerate(word):
+            self.grid[y + idx][x] = w
 
     def _row_separator(self):
         s = ""
@@ -99,19 +109,54 @@ class CrossWordGame:
         self.word_picker = word_picker
         self.grid = grid
         self.placed_words: List[WordInGrid] = []
-        self.horizontal_words=10
-        self.vertical_words=10
+        self.num_horizontal_words = horizontal_words
+        self.num_vertical_words=vertical_words
         self._seed_word(seed_orientation)
+        self._expand_seed_with_backtracking()
 
     def to_json(self):
         return json.dumps({})
 
     def _seed_word(self, seed_orientation):
-        word = self.word_picker.pick_random_unique(self.grid.x_size)
         if seed_orientation == WordOrientation.Horizontal:
-            self.grid.insert_horizontal_word_at_pos(word, (self.grid.x_size - len(word)) // 2, self.grid.x_size // 2)
+            raw_word = self.word_picker.pick_random_unique(self.grid.x_size)
+            word_in_grid = WordInGrid(
+                x_start=(self.grid.x_size - len(raw_word)) // 2,
+                x_end=((self.grid.x_size - len(raw_word)) // 2) + len(raw_word),
+                y_start=(self.grid.x_size // 2),
+                y_end=(self.grid.x_size // 2),
+                hints=[],
+                word=raw_word,
+                orientation=WordOrientation.Horizontal
+            )
+            self.grid.insert_horizontal_word_at_pos(word=raw_word, x=word_in_grid.x_start, y=word_in_grid.y_start)
+            self.placed_words.append(word_in_grid)
         else:
-            raise NotImplementedError("TODO")
+            raise NotImplementedError("TODO!")
+
+    def _expand_seed_with_backtracking(self):
+        seeded_word = self.placed_words[0]
+        y = seeded_word.y_start
+        i = 0
+        x = seeded_word.x_start
+        new_word = self.word_picker.pick_word_with_character(seeded_word.word[i])
+        match_j = -1
+        for j, c in enumerate(new_word):
+            if c == seeded_word.word[i]:
+                match_j = j
+                break
+        self.grid.insert_vertical_word_at_pos(new_word, x, y - match_j)
+        print("match_j", match_j)
+        word_in_grid = WordInGrid(
+            x_start=x,
+            x_end=x,
+            y_start=y-match_j,
+            y_end=(y - match_j) + len(new_word),
+            word=new_word,
+            hints=[],
+            orientation=WordOrientation.Vertical
+        )
+        self.placed_words.append(word_in_grid)
 
     def __repr__(self):
         return self.grid.__repr__()
