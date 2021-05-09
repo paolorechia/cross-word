@@ -1,6 +1,9 @@
 
 from dataclasses import dataclass
 from typing import List, Optional
+from itertools import product
+from operator import attrgetter
+import re
 import json
 import random
 
@@ -160,6 +163,61 @@ class CrossWordGame:
 
     def __repr__(self):
         return self.grid.__repr__()
+
+class WordGraph:
+    def __init__(self, word_list):
+        self.nodes = [ WordNode(word, []) for word in word_list]
+
+        node_combinations = product(self.nodes, self.nodes)
+
+        for a_node, b_node in node_combinations:
+            if a_node == b_node:
+                continue
+
+            for a_idx, char in enumerate(a_node.word):
+                matches = [m for m in re.finditer(char, b_node.word)]
+                for m in matches:
+                    a_node.insert_link(NodeLink(
+                        char=char,
+                        index_a=a_idx,
+                        index_b=m.start(),
+                        linked_node=b_node,
+                    ))
+                    b_node.insert_link(NodeLink(
+                        char=char,
+                        index_a=m.start(),
+                        index_b=a_idx,
+                        linked_node=a_node
+                    ))
+
+
+@dataclass
+class WordNode:
+    word: str
+    links: List[any]  # Must be type NodeLink, but we have circular dependency
+
+    def insert_link(self, link):
+        assert "NodeLink" in str(type(link))
+        for existing_link in self.links:
+            if existing_link == link:
+                return
+        self.links.append(link)
+
+    def __eq__(self, node):
+        return self.word == node.word
+
+@dataclass
+class NodeLink:
+    char: chr
+    index_a: int
+    index_b: int
+    linked_node: WordNode
+
+    def __eq__(self, link):
+        return self.char == link.char and self.index_a == link.index_a and self.index_b == link.index_b and self.linked_node == link.linked_node
+
+    def __str__(self):
+        return f"{self.char}_{self.index_a}_{self.index_b}_linkedto_{self.linked_node.word}"
 
 
 def generate() -> CrossWordGame:
