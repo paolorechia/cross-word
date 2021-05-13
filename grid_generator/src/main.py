@@ -39,6 +39,11 @@ class WordPicker:
         self.unique_words = self.word_dictionary.to_unique_list()
         self.picked_words = set()
 
+    def pick_n_random_words(self, num_words, max_length=10):
+        while len(self.picked_words) < num_words:
+            self.pick_random_unique(max_length=max_length)
+        return self.picked_words
+
     def pick_random_unique(self, max_length = 10):
         picked = self.unique_words[0]
         while picked in self.picked_words or len(picked) > max_length:
@@ -114,55 +119,101 @@ class CrossWordGame:
         self.placed_words: List[WordInGrid] = []
         self.num_horizontal_words = horizontal_words
         self.num_vertical_words=vertical_words
-        self._seed_word(seed_orientation)
-        self._expand_seed_with_backtracking()
+        self.words = self.word_picker.pick_n_random_words(
+            horizontal_words + vertical_words,
+            max_length=10
+        )
+        self.word_graph = WordGraph(self.words)
+        print(self.word_graph)
+
 
     def to_json(self):
         return json.dumps({})
 
-    def _seed_word(self, seed_orientation):
-        if seed_orientation == WordOrientation.Horizontal:
-            raw_word = self.word_picker.pick_random_unique(self.grid.x_size)
-            word_in_grid = WordInGrid(
-                x_start=(self.grid.x_size - len(raw_word)) // 2,
-                x_end=((self.grid.x_size - len(raw_word)) // 2) + len(raw_word),
-                y_start=(self.grid.x_size // 2),
-                y_end=(self.grid.x_size // 2),
-                hints=[],
-                word=raw_word,
-                orientation=WordOrientation.Horizontal
-            )
-            self.grid.insert_horizontal_word_at_pos(word=raw_word, x=word_in_grid.x_start, y=word_in_grid.y_start)
-            self.placed_words.append(word_in_grid)
-        else:
-            raise NotImplementedError("TODO!")
+    def word_path_to_grid(self):
+        """Insert a word path into a grid."""
+    
+    def find_minimum_grid_size(self):
+        """Translade the grid into origin and find minimum rectangular dimensions."""
 
-    def _expand_seed_with_backtracking(self):
-        seeded_word = self.placed_words[0]
-        y = seeded_word.y_start
-        i = 0
-        x = seeded_word.x_start
-        new_word = self.word_picker.pick_word_with_character(seeded_word.word[i])
-        match_j = -1
-        for j, c in enumerate(new_word):
-            if c == seeded_word.word[i]:
-                match_j = j
-                break
-        self.grid.insert_vertical_word_at_pos(new_word, x, y - match_j)
-        print("match_j", match_j)
-        word_in_grid = WordInGrid(
-            x_start=x,
-            x_end=x,
-            y_start=y-match_j,
-            y_end=(y - match_j) + len(new_word),
-            word=new_word,
-            hints=[],
-            orientation=WordOrientation.Vertical
-        )
-        self.placed_words.append(word_in_grid)
+
+    # def _seed_word(self, seed_orientation):
+    #     if seed_orientation == WordOrientation.Horizontal:
+    #         raw_word = self.word_picker.pick_random_unique(self.grid.x_size)
+    #         word_in_grid = WordInGrid(
+    #             x_start=(self.grid.x_size - len(raw_word)) // 2,
+    #             x_end=((self.grid.x_size - len(raw_word)) // 2) + len(raw_word),
+    #             y_start=(self.grid.x_size // 2),
+    #             y_end=(self.grid.x_size // 2),
+    #             hints=[],
+    #             word=raw_word,
+    #             orientation=WordOrientation.Horizontal
+    #         )
+    #         self.grid.insert_horizontal_word_at_pos(word=raw_word, x=word_in_grid.x_start, y=word_in_grid.y_start)
+    #         self.placed_words.append(word_in_grid)
+    #     else:
+    #         raise NotImplementedError("TODO!")
+
+    # def _expand_seed_with_backtracking(self):
+    #     seeded_word = self.placed_words[0]
+    #     y = seeded_word.y_start
+    #     i = 0
+    #     x = seeded_word.x_start
+    #     new_word = self.word_picker.pick_word_with_character(seeded_word.word[i])
+    #     match_j = -1
+    #     for j, c in enumerate(new_word):
+    #         if c == seeded_word.word[i]:
+    #             match_j = j
+    #             break
+    #     self.grid.insert_vertical_word_at_pos(new_word, x, y - match_j)
+    #     print("match_j", match_j)
+    #     word_in_grid = WordInGrid(
+    #         x_start=x,
+    #         x_end=x,
+    #         y_start=y-match_j,
+    #         y_end=(y - match_j) + len(new_word),
+    #         word=new_word,
+    #         hints=[],
+    #         orientation=WordOrientation.Vertical
+    #     )
+    #     self.placed_words.append(word_in_grid)
 
     def __repr__(self):
         return self.grid.__repr__()
+
+@dataclass
+class WordNode:
+    word: str
+    links: List[any]  # Must be type NodeLink, but we have circular dependency
+
+    def insert_link(self, link):
+        assert "NodeLink" in str(type(link))
+        for existing_link in self.links:
+            if existing_link == link:
+                return
+        self.links.append(link)
+
+    def __eq__(self, node):
+        return self.word == node.word
+
+    def __repr__(self):
+        s = f"Node ({self.word})\nLinks:\n"
+        for link in self.links:
+            s += f"-------> str({link})\n"
+        return s
+
+@dataclass
+class NodeLink:
+    char: chr
+    index_a: int
+    index_b: int
+    linked_node: WordNode
+
+    def __eq__(self, link):
+        return self.char == link.char and self.index_a == link.index_a and self.index_b == link.index_b and self.linked_node == link.linked_node
+
+    def __str__(self):
+        return f"{self.char}_{self.index_a}_{self.index_b}_linkedto_{self.linked_node.word}"
 
 class WordGraph:
     def __init__(self, word_list):
@@ -190,35 +241,23 @@ class WordGraph:
                         linked_node=a_node
                     ))
 
+    def generate_all_pathes(self) -> List[List[WordNode]]:
+        """Should generate all possible pathes.
+        
+        Maybe implement as a WordPath
+        """
+        # For each node in path:
+        # root = node
+        # for each link in root
+        # branch into a different possible path
 
-@dataclass
-class WordNode:
-    word: str
-    links: List[any]  # Must be type NodeLink, but we have circular dependency
+        return []
 
-    def insert_link(self, link):
-        assert "NodeLink" in str(type(link))
-        for existing_link in self.links:
-            if existing_link == link:
-                return
-        self.links.append(link)
-
-    def __eq__(self, node):
-        return self.word == node.word
-
-@dataclass
-class NodeLink:
-    char: chr
-    index_a: int
-    index_b: int
-    linked_node: WordNode
-
-    def __eq__(self, link):
-        return self.char == link.char and self.index_a == link.index_a and self.index_b == link.index_b and self.linked_node == link.linked_node
-
-    def __str__(self):
-        return f"{self.char}_{self.index_a}_{self.index_b}_linkedto_{self.linked_node.word}"
-
+    def __repr__(self):
+        s = ""
+        for node in self.nodes:
+            s += str(node)
+        return s
 
 def generate() -> CrossWordGame:
     word_picker = WordPicker("../dictionary_builder/results/result.txt")
