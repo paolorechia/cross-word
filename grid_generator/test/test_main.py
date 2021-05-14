@@ -29,6 +29,8 @@ def test_generate():
 
 
 def test_build_wordgraph():
+    # TODO:
+    # Update these tests with new model for v2
     input_list = ["anel", "animal", "ato"]
     graph = WordGraph(input_list)
 

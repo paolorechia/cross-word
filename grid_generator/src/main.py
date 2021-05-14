@@ -184,6 +184,7 @@ class CrossWordGame:
 @dataclass
 class WordNode:
     word: str
+    # TODO: change to list of linkable letters for v2
     links: List[any]  # Must be type NodeLink, but we have circular dependency
 
     def insert_link(self, link):
@@ -204,10 +205,13 @@ class WordNode:
 
 @dataclass
 class NodeLink:
+    # TODO: change to Linkable Letter for v2
     char: chr
     index_a: int
     index_b: int
+    origin_node: WordNode
     linked_node: WordNode
+    used: bool = False
 
     def __eq__(self, link):
         return self.char == link.char and self.index_a == link.index_a and self.index_b == link.index_b and self.linked_node == link.linked_node
@@ -225,6 +229,7 @@ class WordGraph:
             if a_node == b_node:
                 continue
 
+            # TODO, change to linkable letter linking for v2
             for a_idx, char in enumerate(a_node.word):
                 matches = [m for m in re.finditer(char, b_node.word)]
                 for m in matches:
@@ -232,13 +237,15 @@ class WordGraph:
                         char=char,
                         index_a=a_idx,
                         index_b=m.start(),
+                        origin_node=a_node,
                         linked_node=b_node,
                     ))
                     b_node.insert_link(NodeLink(
                         char=char,
                         index_a=m.start(),
                         index_b=a_idx,
-                        linked_node=a_node
+                        origin_node=b_node,
+                        linked_node=a_node,
                     ))
 
     def generate_all_pathes(self) -> List[List[WordNode]]:
@@ -246,11 +253,32 @@ class WordGraph:
         
         Maybe implement as a WordPath
         """
-        # For each node in path:
-        # root = node
-        # for each link in root
-        # branch into a different possible path
 
+        """
+        Algorithm:
+
+        for each node in nodes:
+            pathfinder(node)
+
+        pathfinder(node):
+            used_links = []
+            if all_nodes_are_visited:
+                if len(used_links) == len(nodes) - 1:
+                    return pathes_that_were_found
+                return no_pathes_were_found
+
+            for node in nodes:
+                search(node, used_links[:])
+
+        search(node, used_links):
+            for link in node.links:
+                if not link.used:
+                    link.used = True
+                    used_links.append(link)
+                    search(link.nodeB, used_links[:])
+                    used_links.pop()
+                    link.used = False
+        """
         return []
 
     def __repr__(self):
