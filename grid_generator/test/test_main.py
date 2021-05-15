@@ -1,6 +1,9 @@
 import unittest
-from copy import deepcopy
+from unittest.mock import patch, mock_open
+from operator import attrgetter
 
+from copy import deepcopy
+import json
 from grid_generator.src.main import (
     generate,
     CrossWordGame,
@@ -9,30 +12,58 @@ from grid_generator.src.main import (
     search,
 )
 
+sample_json_word_dict = [
+    {"word": "anel", "lemma": "anel", "upos": "GENRE", "feats": []},
+    {"word": "anelar", "lemma": "anelar", "upos": "GENRE", "feats": []},
+    {"word": "animal", "lemma": "animal", "upos": "GENRE", "feats": []},
+    {"word": "carbono", "lemma": "carbono", "upos": "GENRE", "feats": []},
+    {"word": "bobo", "lemma": "bobo", "upos": "GENRE", "feats": []},
+    {"word": "vascular", "lemma": "vascular", "upos": "GENRE", "feats": []},
+    {"word": "roberto", "lemma": "roberto", "upos": "GENRE", "feats": []},
+    {"word": "feito", "lemma": "fazer", "upos": "GENRE", "feats": []},
+    {"word": "palavras", "lemma": "palavra", "upos": "GENRE", "feats": []},
+    {"word": "dicionario", "lemma": "dicionario", "upos": "GENRE", "feats": []},
+    {"word": "muito", "lemma": "muito", "upos": "GENRE", "feats": []},
+    {"word": "legal", "lemma": "legal", "upos": "GENRE", "feats": []},
+    {"word": "policial", "lemma": "policial", "upos": "GENRE", "feats": []},
+    {"word": "teste", "lemma": "teste", "upos": "GENRE", "feats": []},
+    {"word": "poucos", "lemma": "pouco", "upos": "GENRE", "feats": []},
+    {"word": "reto", "lemma": "reto", "upos": "GENRE", "feats": []},
+    {"word": "raspado", "lemma": "raspado", "upos": "GENRE", "feats": []},
+    {"word": "sujo", "lemma": "sujo", "upos": "GENRE", "feats": []},
+    {"word": "safado", "lemma": "safado", "upos": "GENRE", "feats": []},
+    {"word": "limpo", "lemma": "limpo", "upos": "GENRE", "feats": []},
+    {"word": "amortizado", "lemma": "amortizado", "upos": "GENRE", "feats": []},
+]
+
 
 def test_generate():
-    game: CrossWordGame = generate()
-    # print(game)
-    # print([w.word for w in game.placed_words])
-    assert len(game.placed_words) == game.num_vertical_words + game.num_horizontal_words
-    # assert all words are in grid
-    for pword in game.placed_words:
-        i = 0
-        if pword.orientation == WordOrientation.Horizontal:
-            assert pword.y_start == pword.y_end
-            for x in range(pword.x_start, pword.x_end):
-                game.grid[pword.y_start][x] == pword.word[i]
-                i += 1
-        else:
-            assert pword.x_start == pword.x_end
-            for y in range(pword.y_start, pword.y_end):
-                assert game.grid[y][pword.x_start] == pword.word[i]
-                i += 1
+    with patch(
+        "builtins.open", mock_open(read_data=json.dumps(sample_json_word_dict))
+    ) as mock_file:
+        game: CrossWordGame = generate()
+        # print(game)
+        # print([w.word for w in game.placed_words])
+        assert (
+            len(game.placed_words)
+            == game.num_vertical_words + game.num_horizontal_words
+        )
+        # assert all words are in grid
+        for pword in game.placed_words:
+            i = 0
+            if pword.orientation == WordOrientation.Horizontal:
+                assert pword.y_start == pword.y_end
+                for x in range(pword.x_start, pword.x_end):
+                    game.grid[pword.y_start][x] == pword.word[i]
+                    i += 1
+            else:
+                assert pword.x_start == pword.x_end
+                for y in range(pword.y_start, pword.y_end):
+                    assert game.grid[y][pword.x_start] == pword.word[i]
+                    i += 1
 
 
 def test_build_wordgraph():
-    # TODO:
-    # Update these tests with new model for v2
     input_list = ["anel", "animal", "ato"]
     graph = WordGraph(input_list)
 
@@ -47,26 +78,27 @@ def test_build_wordgraph():
                     print(linkable_letter)
                     strings = [str(l) for l in linkable_letter.links]
                     assert sorted(strings) == [
-                        "a_0_0_linkedto_animal",
-                        "a_0_0_linkedto_ato",
-                        "a_0_4_linkedto_animal",
+                        "anel_0(a)__linkedto__0(a)_animal",
+                        "anel_0(a)__linkedto__0(a)_ato",
+                        "anel_0(a)__linkedto__4(a)_animal",
                     ]
                 if linkable_letter.char == "l":
                     strings = [str(l) for l in linkable_letter.links]
                     assert sorted(strings) == [
-                        "l_3_5_linkedto_animal",
+                        "anel_3(l)__linkedto__5(l)_animal",
                     ]
                 if linkable_letter.char == "n":
                     strings = [str(l) for l in linkable_letter.links]
                     assert sorted(strings) == [
-                        "n_1_1_linkedto_animal",
+                        "anel_1(n)__linkedto__1(n)_animal",
                     ]
+
         if node.word == "ato":
             strings = [str(l) for l in node.linkable_letters[0].links]
             assert sorted(strings) == [
-                "a_0_0_linkedto_anel",
-                "a_0_0_linkedto_animal",
-                "a_0_4_linkedto_animal",
+                "ato_0(a)__linkedto__0(a)_anel",
+                "ato_0(a)__linkedto__0(a)_animal",
+                "ato_0(a)__linkedto__4(a)_animal",
             ]
 
         if node.word == "animal":
@@ -75,26 +107,22 @@ def test_build_wordgraph():
                     if linkable_letter.index == 0:
                         strings = [str(l) for l in linkable_letter.links]
                         assert sorted(strings) == [
-                            "a_0_0_linkedto_anel",
-                            "a_0_0_linkedto_ato",
+                            "animal_0(a)__linkedto__0(a)_anel",
+                            "animal_0(a)__linkedto__0(a)_ato",
                         ]
 
                     if linkable_letter.index == 4:
                         strings = [str(l) for l in linkable_letter.links]
                         assert sorted(strings) == [
-                            "a_4_0_linkedto_anel",
-                            "a_4_0_linkedto_ato",
+                            "animal_4(a)__linkedto__0(a)_anel",
+                            "animal_4(a)__linkedto__0(a)_ato",
                         ]
                 if linkable_letter.char == "l":
                     strings = [str(l) for l in linkable_letter.links]
-                    assert sorted(strings) == [
-                        "l_5_3_linkedto_anel",
-                    ]
+                    assert sorted(strings) == ["animal_5(l)__linkedto__3(l)_anel"]
                 if linkable_letter.char == "n":
                     strings = [str(l) for l in linkable_letter.links]
-                    assert sorted(strings) == [
-                        "n_1_1_linkedto_anel",
-                    ]
+                    assert sorted(strings) == ["animal_1(n)__linkedto__1(n)_anel"]
 
 
 def test_wordgraph_deepcopy_works():
@@ -122,14 +150,72 @@ def test_node_deepcopy_works():
     assert not node.linkable_letters[0].links[0].used
 
 
+def test_mirrored_links():
+    input_list = ["anel", "animal", "ato"]
+    graph = WordGraph(input_list)
+    for node in graph.nodes:
+        if node.word == "anel":
+            for letter in node.linkable_letters:
+                if letter.char == "a":
+                    mirrored_links = [l[1] for l in letter.find_mirrored_links()]
+                    mirrored_links.sort(key=attrgetter("target_node.word"))
+                    for link in mirrored_links:
+                        print(link)
+                    assert len(mirrored_links) == 3
+                    link = mirrored_links[0]
+                    assert link.char == "a"
+                    assert link.index_a == 0
+                    assert link.index_b == 0
+                    assert link.target_node.word == "anel"
+                    assert link.origin_node.word == "animal"
+                    link = mirrored_links[1]
+                    assert link.char == "a"
+                    assert link.index_a == 4
+                    assert link.index_b == 0
+                    assert link.target_node.word == "anel"
+                    assert link.origin_node.word == "animal"
+                    link = mirrored_links[2]
+                    assert link.char == "a"
+                    assert link.index_a == 0
+                    assert link.index_b == 0
+                    assert link.target_node.word == "anel"
+                    assert link.origin_node.word == "ato"
+
+def test_find_mutually_exclusive():
+    input_list = ["anel", "animal", "ato"]
+    graph = WordGraph(input_list)
+    for node in graph.nodes:
+        if node.word == "anel":
+            for letter in node.linkable_letters:
+                if letter.char == "a":
+                    mirrored_links = [l[1] for l in letter.find_mirrored_links()]
+                    mirrored_links.sort(key=attrgetter("target_node.word"))
+                    link = mirrored_links[0]
+                    origin_node = link.origin_node
+                    for letter in origin_node.linkable_letters:
+                        if letter.char == "a" and letter.index == 0:
+                            mutually_exclusive = letter.find_mutually_exclusive_links()
+                            mutually_exclusive.sort(key=attrgetter("target_node.word"))
+                            tlink = mutually_exclusive[0]
+                            assert tlink.char == "a"
+                            assert tlink.index_a == 0
+                            assert tlink.index_b == 0
+                            assert tlink.target_node.word == "anel"
+                            assert tlink.origin_node.word == "animal"
+                            tlink = mutually_exclusive[1]
+                            assert tlink.char == "a"
+                            assert tlink.index_a == 0
+                            assert tlink.index_b == 0
+                            assert tlink.target_node.word == "ato"
+                            assert tlink.origin_node.word == "animal"
+
 def test_search_on_graph():
     input_list = ["anel", "animal", "ato"]
     graph = WordGraph(input_list)
     path_matrix = []
-    search(graph.nodes[0], [], path_matrix, set())
-    print(path_matrix)
-    print(len(path_matrix))
-    print(len(path_matrix[0]))
+    search(graph, 0, [], path_matrix, set())
+    for idx, path in enumerate(path_matrix):
+        print(f"Path {idx}: {path}")
     assert path_matrix
     assert False
 

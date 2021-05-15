@@ -193,7 +193,7 @@ class WordNode:
         self.visited: bool = False
         self.linkable_letters: List[LinkableLetter] = []
         for idx, char in enumerate(self.word):
-            self.linkable_letters.append(LinkableLetter(char, idx))
+            self.linkable_letters.append(LinkableLetter(char, idx, self))
 
     def insert_link(self, link):
         assert "NodeLink" in str(type(link))
@@ -203,13 +203,14 @@ class WordNode:
                     for existing_link in linkable_letter.links:
                         if existing_link == link:
                             return
+                    link.set_parent_letter(linkable_letter)
                     linkable_letter.links.append(link)
 
     def __eq__(self, node):
         return self.word == node.word
 
     def __repr__(self):
-        s = f"Node ({self.word})\nLinks:\n"
+        s = f"Node ({self.word})\n"
         # for link in self.links:
         #     s += f"-------> {str(link)}\n"
         return s
@@ -217,31 +218,76 @@ class WordNode:
 
 @dataclass
 class NodeLink:
-    char: chr
+    char: str
     index_a: int
     index_b: int
     origin_node: WordNode
-    linked_node: WordNode
+    target_node: WordNode
     used: bool = False
+    parent_letter: Optional[any] = None
+
+    def set_parent_letter(self, parent_letter: any):
+        self.parent_letter = parent_letter
 
     def __eq__(self, link):
         return (
             self.char == link.char
             and self.index_a == link.index_a
             and self.index_b == link.index_b
-            and self.linked_node == link.linked_node
+            and self.target_node == link.target_node
         )
 
     def __str__(self):
-        return f"{self.char}_{self.index_a}_{self.index_b}_linkedto_{self.linked_node.word}"
+        return f"{self.origin_node.word}_{self.index_a}({self.char})__linkedto__{self.index_b}({self.char})_{self.target_node.word}"
 
 
-@dataclass
 class LinkableLetter:
-    char: chr
-    index: int
-    links: List[NodeLink] = field(default_factory=list)
-    linked: bool = False
+    def __init__(self, char, index, parent_node):
+        self.char: str = char
+        self.index: int = index
+        self.parent_node: WordNode = parent_node
+        self.links: List[NodeLink] = []
+        self.linked: bool = False
+
+
+    def _find_mirrored_links(self):
+        target_nodes = []
+        mirrored_links = []
+        for link in self.links:
+            target_nodes.append(link.target_node)
+        added_links = set()
+        for node in target_nodes:
+            for letter in node.linkable_letters:
+                if letter.char == self.char:
+                    for link in letter.links:
+                        if (
+                            link.index_b == self.index
+                            and link.target_node == self.parent_node
+                        ):
+                            if str(link) not in added_links:
+                                mirrored_links.append((deepcopy(letter), deepcopy(link)))
+                                added_links.add(str(link))
+
+        return mirrored_links
+
+
+    def find_mutually_exclusive_links(self):
+        """Finds mutually_exclusive for a given linkable letter."""
+        mutually_exclusive = []
+        for link in self.links:
+            if link.index_a == self.index:
+                mutually_exclusive.append(link)
+        return mutually_exclusive
+
+
+    def find_mirrored_links(self) -> List[Tuple[any, NodeLink]]:
+        """Find links that are mirrored.
+
+        This returns which links must be set to 'used' to enforce
+        that the same letter is not used in multiple links.
+        """
+        mirrored_links = self._find_mirrored_links()
+        return mirrored_links
 
 
 class WordGraph:
@@ -263,7 +309,7 @@ class WordGraph:
                             index_a=a_idx,
                             index_b=m.start(),
                             origin_node=a_node,
-                            linked_node=b_node,
+                            target_node=b_node,
                         )
                     )
                     b_node.insert_link(
@@ -272,7 +318,7 @@ class WordGraph:
                             index_a=m.start(),
                             index_b=a_idx,
                             origin_node=b_node,
-                            linked_node=a_node,
+                            target_node=a_node,
                         )
                     )
 
@@ -299,33 +345,58 @@ def generate_all_pathes(input_graph: WordGraph) -> List[List[WordNode]]:
 
 
 def search(
-    input_node: WordNode,
+    input_graph,
+    input_node_idx: int,
     traversed_path: List[Tuple[WordNode, NodeLink]],
     path_matrix,
     linked_pairs,
 ):
-    print(input_node)
+    graph = deepcopy(input_graph)
+    input_node = graph.nodes[input_node_idx]
+    print(linked_pairs)
+    print("On node:", input_node)
+    current_path = deepcopy(traversed_path)
     if input_node.visited:
+        print("Reached visited, ending")
         path_matrix.append(traversed_path)
         return
-    for l_idx, linkable_letter in enumerate(input_node.linkable_letters):
-        if not linkable_letter.linked:
-            for idx, link in enumerate(linkable_letter.links):
-                pair_to_link = [input_node.word, link.linked_node.word]
+    for linkable_letter in input_node.linkable_letters:
+        if linkable_letter.linked:
+            print("USED", linkable_letter, linkable_letter.links)
+        else:
+            print("FREE", linkable_letter, linkable_letter.links)
+            for link in linkable_letter.links:
+                pair_to_link = [input_node.word, link.target_node.word]
                 pair_to_link.sort()
                 hsh = f"{pair_to_link[0]}_{pair_to_link[1]}"
                 if not link.used and hsh not in linked_pairs:
-                    linked_pairs.add(hsh)
-                    origin_node = deepcopy(input_node)
-                    current_letter = origin_node.linkable_letters[l_idx]
-                    current_letter.linked = True
-                    current_letter.links[idx].used = True
-                    origin_node.visited = True
                     current_path = deepcopy(traversed_path)
-                    current_path.append((origin_node, current_letter.links[idx]))
-                    next_node = current_letter.links[idx].linked_node
-                    search(next_node, current_path, path_matrix, linked_pairs)
-
+                    current_path.append(("TYPE NODE", input_node, "TYPE LINK", link))
+                    current_linked_pairs = deepcopy(linked_pairs)
+                    current_linked_pairs.add(hsh)
+                    input_node.visited = True
+                    linkable_letter.linked = True
+                    link.used = True
+                    link.parent_letter.linked = True
+                    mirrored_links = linkable_letter.find_mirrored_links()
+                    for letter, link_ in mirrored_links:
+                        letter = True
+                        link_.used = True
+                        print("Flagging as mirrored", link_)
+                    new_node_idx = -1
+                    for idx, node in enumerate(graph.nodes):
+                        if node.word == link.target_node.word:
+                            new_node_idx = idx
+                    print(new_node_idx)
+                    search(
+                        graph,
+                        new_node_idx,
+                        current_path,
+                        path_matrix,
+                        current_linked_pairs,
+                    )
+    print("Out of choices, ended")
+    path_matrix.append(traversed_path)
 
 def pathfinder(graph: WordGraph, root_node_idx: int):
     used_links = []
