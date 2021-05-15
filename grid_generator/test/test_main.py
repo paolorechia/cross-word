@@ -1,4 +1,3 @@
-
 import unittest
 from copy import deepcopy
 
@@ -7,11 +6,12 @@ from grid_generator.src.main import (
     CrossWordGame,
     WordGraph,
     WordOrientation,
-    search
+    search,
 )
 
+
 def test_generate():
-    game : CrossWordGame = generate()
+    game: CrossWordGame = generate()
     # print(game)
     # print([w.word for w in game.placed_words])
     assert len(game.placed_words) == game.num_vertical_words + game.num_horizontal_words
@@ -47,26 +47,26 @@ def test_build_wordgraph():
                     print(linkable_letter)
                     strings = [str(l) for l in linkable_letter.links]
                     assert sorted(strings) == [
-                        'a_0_0_linkedto_animal',
-                        'a_0_0_linkedto_ato',
-                        'a_0_4_linkedto_animal',
+                        "a_0_0_linkedto_animal",
+                        "a_0_0_linkedto_ato",
+                        "a_0_4_linkedto_animal",
                     ]
                 if linkable_letter.char == "l":
                     strings = [str(l) for l in linkable_letter.links]
                     assert sorted(strings) == [
-                        'l_3_5_linkedto_animal',
+                        "l_3_5_linkedto_animal",
                     ]
                 if linkable_letter.char == "n":
                     strings = [str(l) for l in linkable_letter.links]
                     assert sorted(strings) == [
-                        'n_1_1_linkedto_animal',
+                        "n_1_1_linkedto_animal",
                     ]
         if node.word == "ato":
             strings = [str(l) for l in node.linkable_letters[0].links]
             assert sorted(strings) == [
-                'a_0_0_linkedto_anel',
-                'a_0_0_linkedto_animal',
-                "a_0_4_linkedto_animal"
+                "a_0_0_linkedto_anel",
+                "a_0_0_linkedto_animal",
+                "a_0_4_linkedto_animal",
             ]
 
         if node.word == "animal":
@@ -75,26 +75,27 @@ def test_build_wordgraph():
                     if linkable_letter.index == 0:
                         strings = [str(l) for l in linkable_letter.links]
                         assert sorted(strings) == [
-                            'a_0_0_linkedto_anel',
-                            'a_0_0_linkedto_ato',
+                            "a_0_0_linkedto_anel",
+                            "a_0_0_linkedto_ato",
                         ]
 
                     if linkable_letter.index == 4:
                         strings = [str(l) for l in linkable_letter.links]
                         assert sorted(strings) == [
-                            'a_4_0_linkedto_anel',
-                            'a_4_0_linkedto_ato',
+                            "a_4_0_linkedto_anel",
+                            "a_4_0_linkedto_ato",
                         ]
                 if linkable_letter.char == "l":
                     strings = [str(l) for l in linkable_letter.links]
                     assert sorted(strings) == [
-                        'l_5_3_linkedto_anel',
+                        "l_5_3_linkedto_anel",
                     ]
                 if linkable_letter.char == "n":
                     strings = [str(l) for l in linkable_letter.links]
                     assert sorted(strings) == [
-                        'n_1_1_linkedto_anel',
+                        "n_1_1_linkedto_anel",
                     ]
+
 
 def test_wordgraph_deepcopy_works():
     input_list = ["anel", "animal", "ato"]
@@ -109,6 +110,7 @@ def test_wordgraph_deepcopy_works():
     graph2.nodes.append("Duh")
     assert len(graph.nodes) != len(graph2.nodes)
 
+
 def test_node_deepcopy_works():
     input_list = ["anel", "animal", "ato"]
     graph = WordGraph(input_list)
@@ -116,8 +118,9 @@ def test_node_deepcopy_works():
     node2 = deepcopy(node)
     node2.linkable_letters[0].linked = True
     node2.linkable_letters[0].links[0].used = True
-    assert not node.linkable_letters[0].linked    
+    assert not node.linkable_letters[0].linked
     assert not node.linkable_letters[0].links[0].used
+
 
 def test_search_on_graph():
     input_list = ["anel", "animal", "ato"]
@@ -129,6 +132,7 @@ def test_search_on_graph():
     print(len(path_matrix[0]))
     assert path_matrix
     assert False
+
 
 if __name__ == "__main__":
     unittest.main()

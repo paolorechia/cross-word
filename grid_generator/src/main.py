@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 from itertools import product
@@ -7,6 +6,7 @@ from copy import deepcopy
 import re
 import json
 import random
+
 
 @dataclass
 class WordEntry:
@@ -17,6 +17,7 @@ class WordEntry:
 
     def get_hints_from_word(self):
         return ["TODO HINTS"]
+
 
 class WordDictionary:
     def __init__(self, words_list):
@@ -33,6 +34,7 @@ class WordDictionary:
             s.add(word.word)
         return list(s)
 
+
 class WordPicker:
     def __init__(self, filename):
         with open(filename, "r") as fp:
@@ -45,7 +47,7 @@ class WordPicker:
             self.pick_random_unique(max_length=max_length)
         return self.picked_words
 
-    def pick_random_unique(self, max_length = 10):
+    def pick_random_unique(self, max_length=10):
         picked = self.unique_words[0]
         while picked in self.picked_words or len(picked) > max_length:
             rand_int = random.randint(0, len(self.unique_words) - 1)
@@ -53,15 +55,17 @@ class WordPicker:
         self.picked_words.add(picked)
         return picked
 
-    def pick_word_with_character(self, char, max_length = 10):
+    def pick_word_with_character(self, char, max_length=10):
         picked = self.pick_random_unique(max_length)
         while char not in picked:
             picked = self.pick_random_unique(max_length)
         return picked
 
+
 class WordOrientation:
     Vertical = "vertical"
     Horizontal = "horizontal"
+
 
 @dataclass
 class WordInGrid:
@@ -72,6 +76,7 @@ class WordInGrid:
     hints: List[str]
     word: Optional[str] = None
     orientation: WordOrientation = WordOrientation.Horizontal
+
 
 class Grid:
     def __init__(self, x_size=20, y_size=20):
@@ -94,7 +99,7 @@ class Grid:
 
     def _row_separator(self):
         s = ""
-        s += ("-" * ((self.x_size * 4) + 1))
+        s += "-" * ((self.x_size * 4) + 1)
         s += "\n"
         return s
 
@@ -107,36 +112,35 @@ class Grid:
             s += self._row_separator()
         return s
 
+
 class CrossWordGame:
-    def __init__(self, 
+    def __init__(
+        self,
         word_picker: WordPicker,
         grid: Grid,
         horizontal_words=10,
         vertical_words=10,
-        seed_orientation=WordOrientation.Horizontal
+        seed_orientation=WordOrientation.Horizontal,
     ):
         self.word_picker = word_picker
         self.grid = grid
         self.placed_words: List[WordInGrid] = []
         self.num_horizontal_words = horizontal_words
-        self.num_vertical_words=vertical_words
+        self.num_vertical_words = vertical_words
         self.words = self.word_picker.pick_n_random_words(
-            horizontal_words + vertical_words,
-            max_length=10
+            horizontal_words + vertical_words, max_length=10
         )
         self.word_graph = WordGraph(self.words)
         # print(self.word_graph)
-
 
     def to_json(self):
         return json.dumps({})
 
     def word_path_to_grid(self):
         """Insert a word path into a grid."""
-    
+
     def find_minimum_grid_size(self):
         """Translade the grid into origin and find minimum rectangular dimensions."""
-
 
     # def _seed_word(self, seed_orientation):
     #     if seed_orientation == WordOrientation.Horizontal:
@@ -182,6 +186,7 @@ class CrossWordGame:
     def __repr__(self):
         return self.grid.__repr__()
 
+
 class WordNode:
     def __init__(self, word):
         self.word: str = word
@@ -220,10 +225,16 @@ class NodeLink:
     used: bool = False
 
     def __eq__(self, link):
-        return self.char == link.char and self.index_a == link.index_a and self.index_b == link.index_b and self.linked_node == link.linked_node
+        return (
+            self.char == link.char
+            and self.index_a == link.index_a
+            and self.index_b == link.index_b
+            and self.linked_node == link.linked_node
+        )
 
     def __str__(self):
         return f"{self.char}_{self.index_a}_{self.index_b}_linkedto_{self.linked_node.word}"
+
 
 @dataclass
 class LinkableLetter:
@@ -232,9 +243,10 @@ class LinkableLetter:
     links: List[NodeLink] = field(default_factory=list)
     linked: bool = False
 
+
 class WordGraph:
     def __init__(self, word_list):
-        self.nodes = [ WordNode(word) for word in word_list]
+        self.nodes = [WordNode(word) for word in word_list]
 
         node_combinations = product(self.nodes, self.nodes)
 
@@ -245,20 +257,24 @@ class WordGraph:
             for a_idx, char in enumerate(a_node.word):
                 matches = [m for m in re.finditer(char, b_node.word)]
                 for m in matches:
-                    a_node.insert_link(NodeLink(
-                        char=char,
-                        index_a=a_idx,
-                        index_b=m.start(),
-                        origin_node=a_node,
-                        linked_node=b_node,
-                    ))
-                    b_node.insert_link(NodeLink(
-                        char=char,
-                        index_a=m.start(),
-                        index_b=a_idx,
-                        origin_node=b_node,
-                        linked_node=a_node,
-                    ))
+                    a_node.insert_link(
+                        NodeLink(
+                            char=char,
+                            index_a=a_idx,
+                            index_b=m.start(),
+                            origin_node=a_node,
+                            linked_node=b_node,
+                        )
+                    )
+                    b_node.insert_link(
+                        NodeLink(
+                            char=char,
+                            index_a=m.start(),
+                            index_b=a_idx,
+                            origin_node=b_node,
+                            linked_node=a_node,
+                        )
+                    )
 
     def __repr__(self):
         s = ""
@@ -266,10 +282,11 @@ class WordGraph:
             s += str(node)
         return s
 
+
 def generate_all_pathes(input_graph: WordGraph) -> List[List[WordNode]]:
     """
     Should generate all possible pathes.
-    
+
     Maybe implement as a WordPath
     """
 
@@ -280,11 +297,12 @@ def generate_all_pathes(input_graph: WordGraph) -> List[List[WordNode]]:
         pathes_matrix.append(pathes_for_one_root_node)
     # TODO: flatten pathes_matrix
 
+
 def search(
     input_node: WordNode,
     traversed_path: List[Tuple[WordNode, NodeLink]],
     path_matrix,
-    linked_pairs
+    linked_pairs,
 ):
     print(input_node)
     if input_node.visited:
@@ -308,6 +326,7 @@ def search(
                     next_node = current_letter.links[idx].linked_node
                     search(next_node, current_path, path_matrix, linked_pairs)
 
+
 def pathfinder(graph: WordGraph, root_node_idx: int):
     used_links = []
     pathes_that_were_found = []
@@ -318,13 +337,14 @@ def pathfinder(graph: WordGraph, root_node_idx: int):
 
     if len(used_links) == len(nodes) - 1:
         return pathes_that_were_found
-    return [] # no pathes were found
+    return []  # no pathes were found
 
 
 def generate() -> CrossWordGame:
     word_picker = WordPicker("../dictionary_builder/results/result.txt")
     g = Grid(x_size=30, y_size=30)
     return CrossWordGame(word_picker, g, horizontal_words=10, vertical_words=10)
+
 
 if __name__ == "__main__":
     generate()
