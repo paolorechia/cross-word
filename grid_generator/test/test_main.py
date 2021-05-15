@@ -10,6 +10,7 @@ from grid_generator.src.main import (
     WordGraph,
     WordOrientation,
     search,
+    path_to_string
 )
 
 sample_json_word_dict = [
@@ -212,11 +213,13 @@ def test_find_mutually_exclusive():
 def test_search_on_graph():
     input_list = ["anel", "animal", "ato"]
     graph = WordGraph(input_list)
-    partial_path_matrix = []
-    search(graph, 0, [], partial_path_matrix, set())
-    for idx, path in enumerate(partial_path_matrix):
-        print(f"Path {idx}: {path}")
-    assert len(partial_path_matrix) == 7
+    partial_path_dict = {}
+    search(graph, 0, [], partial_path_dict, set())
+    for key, item in enumerate(partial_path_dict):
+        print(f"Path {key}\n----------------------------------")
+        print(item)
+        print(f"\n----------------------------------\n")
+    assert len(partial_path_dict) == 7
     assert False
 
 

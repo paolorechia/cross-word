@@ -249,6 +249,8 @@ class LinkableLetter:
         self.links: List[NodeLink] = []
         self.linked: bool = False
 
+    def __repr__(self):
+        return f"LinkableLetter(char={self.char}, index={self.index}, linked={self.linked}"
 
     def _find_mirrored_links(self):
         target_nodes = []
@@ -347,8 +349,8 @@ def generate_all_pathes(input_graph: WordGraph) -> List[List[WordNode]]:
 def search(
     input_graph,
     input_node_idx: int,
-    traversed_path: List[Tuple[WordNode, NodeLink]],
-    path_matrix,
+    traversed_path: List[NodeLink],
+    path_dict,
     linked_pairs,
 ):
     graph = deepcopy(input_graph)
@@ -356,10 +358,6 @@ def search(
     # print(linked_pairs)
     # print("On node:", input_node)
     current_path = deepcopy(traversed_path)
-    if input_node.visited:
-        # print("Reached visited, ending")
-        path_matrix.append(traversed_path)
-        return
     for linkable_letter in input_node.linkable_letters:
         if not linkable_letter.linked:
             # print("FREE", linkable_letter, linkable_letter.links)
@@ -369,7 +367,7 @@ def search(
                 hsh = f"{pair_to_link[0]}_{pair_to_link[1]}"
                 if not link.used and hsh not in linked_pairs:
                     current_path = deepcopy(traversed_path)
-                    current_path.append(("TYPE NODE", input_node, "TYPE LINK", link))
+                    current_path.append(link)
                     current_linked_pairs = deepcopy(linked_pairs)
                     current_linked_pairs.add(hsh)
                     input_node.visited = True
@@ -396,19 +394,38 @@ def search(
                         graph,
                         new_node_idx,
                         current_path,
-                        path_matrix,
+                        path_dict,
                         current_linked_pairs,
                     )
+                    # Reset state for backtracking
+                    input_node.visited = False
+                    linkable_letter.linked = False
+                    link.used = False
+                    link.parent_letter.linked = False
+                    for letter, link_ in mirrored_links:
+                        letter = False
+                        link_.used = False
+                        # print("Flagging as mirrored", link_)
+                    for letter in link.target_node.linkable_letters:
+                        if letter.char == link.char and letter.index == link.index_b:
+                            links_ = letter.find_mutually_exclusive_links()
+                            for link_ in links_:
+                                # print("Flagging as mutually exclusive", link_)
+                                link_.used = False
     # print("Out of choices, ended")
-    path_matrix.append(current_path)
+    path_to_key = path_to_string(current_path)
+    path_dict[path_to_key] = current_path
+
+def path_to_string(path: List[NodeLink]):
+    return "--".join([str(p) for p in path])
 
 def pathfinder(graph: WordGraph, root_node_idx: int):
     used_links = []
     pathes_that_were_found = []
     while not all_nodes_are_visited:
         for node in graph.nodes:
-            partial_path_matrix = []
-            search(node, [], partial_path_matrix)
+            partial_path_dict = []
+            search(node, [], partial_path_dict)
 
     if len(used_links) == len(nodes) - 1:
         return pathes_that_were_found
