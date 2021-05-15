@@ -353,18 +353,16 @@ def search(
 ):
     graph = deepcopy(input_graph)
     input_node = graph.nodes[input_node_idx]
-    print(linked_pairs)
-    print("On node:", input_node)
+    # print(linked_pairs)
+    # print("On node:", input_node)
     current_path = deepcopy(traversed_path)
     if input_node.visited:
-        print("Reached visited, ending")
+        # print("Reached visited, ending")
         path_matrix.append(traversed_path)
         return
     for linkable_letter in input_node.linkable_letters:
-        if linkable_letter.linked:
-            print("USED", linkable_letter, linkable_letter.links)
-        else:
-            print("FREE", linkable_letter, linkable_letter.links)
+        if not linkable_letter.linked:
+            # print("FREE", linkable_letter, linkable_letter.links)
             for link in linkable_letter.links:
                 pair_to_link = [input_node.word, link.target_node.word]
                 pair_to_link.sort()
@@ -382,12 +380,18 @@ def search(
                     for letter, link_ in mirrored_links:
                         letter = True
                         link_.used = True
-                        print("Flagging as mirrored", link_)
+                        # print("Flagging as mirrored", link_)
+                    for letter in link.target_node.linkable_letters:
+                        if letter.char == link.char and letter.index == link.index_b:
+                            links_ = letter.find_mutually_exclusive_links()
+                            for link_ in links_:
+                                # print("Flagging as mutually exclusive", link_)
+                                link_.used = True
                     new_node_idx = -1
                     for idx, node in enumerate(graph.nodes):
                         if node.word == link.target_node.word:
                             new_node_idx = idx
-                    print(new_node_idx)
+                    # print(new_node_idx)
                     search(
                         graph,
                         new_node_idx,
@@ -395,8 +399,8 @@ def search(
                         path_matrix,
                         current_linked_pairs,
                     )
-    print("Out of choices, ended")
-    path_matrix.append(traversed_path)
+    # print("Out of choices, ended")
+    path_matrix.append(current_path)
 
 def pathfinder(graph: WordGraph, root_node_idx: int):
     used_links = []

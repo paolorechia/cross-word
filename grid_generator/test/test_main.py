@@ -212,11 +212,11 @@ def test_find_mutually_exclusive():
 def test_search_on_graph():
     input_list = ["anel", "animal", "ato"]
     graph = WordGraph(input_list)
-    path_matrix = []
-    search(graph, 0, [], path_matrix, set())
-    for idx, path in enumerate(path_matrix):
+    partial_path_matrix = []
+    search(graph, 0, [], partial_path_matrix, set())
+    for idx, path in enumerate(partial_path_matrix):
         print(f"Path {idx}: {path}")
-    assert path_matrix
+    assert len(partial_path_matrix) == 7
     assert False
 
 
