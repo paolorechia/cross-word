@@ -1,8 +1,9 @@
 
-from dataclasses import dataclass
-from typing import List, Optional
+from dataclasses import dataclass, field
+from typing import List, Optional, Tuple
 from itertools import product
 from operator import attrgetter
+from copy import deepcopy
 import re
 import json
 import random
@@ -124,7 +125,7 @@ class CrossWordGame:
             max_length=10
         )
         self.word_graph = WordGraph(self.words)
-        print(self.word_graph)
+        # print(self.word_graph)
 
 
     def to_json(self):
@@ -181,31 +182,36 @@ class CrossWordGame:
     def __repr__(self):
         return self.grid.__repr__()
 
-@dataclass
 class WordNode:
-    word: str
-    # TODO: change to list of linkable letters for v2
-    links: List[any]  # Must be type NodeLink, but we have circular dependency
+    def __init__(self, word):
+        self.word: str = word
+        self.visited: bool = False
+        self.linkable_letters: List[LinkableLetter] = []
+        for idx, char in enumerate(self.word):
+            self.linkable_letters.append(LinkableLetter(char, idx))
 
     def insert_link(self, link):
         assert "NodeLink" in str(type(link))
-        for existing_link in self.links:
-            if existing_link == link:
-                return
-        self.links.append(link)
+        for linkable_letter in self.linkable_letters:
+            if link.char == linkable_letter.char:  # Matching letter
+                if linkable_letter.index == link.index_a:  # Matching index
+                    for existing_link in linkable_letter.links:
+                        if existing_link == link:
+                            return
+                    linkable_letter.links.append(link)
 
     def __eq__(self, node):
         return self.word == node.word
 
     def __repr__(self):
         s = f"Node ({self.word})\nLinks:\n"
-        for link in self.links:
-            s += f"-------> str({link})\n"
+        # for link in self.links:
+        #     s += f"-------> {str(link)}\n"
         return s
+
 
 @dataclass
 class NodeLink:
-    # TODO: change to Linkable Letter for v2
     char: chr
     index_a: int
     index_b: int
@@ -219,9 +225,16 @@ class NodeLink:
     def __str__(self):
         return f"{self.char}_{self.index_a}_{self.index_b}_linkedto_{self.linked_node.word}"
 
+@dataclass
+class LinkableLetter:
+    char: chr
+    index: int
+    links: List[NodeLink] = field(default_factory=list)
+    linked: bool = False
+
 class WordGraph:
     def __init__(self, word_list):
-        self.nodes = [ WordNode(word, []) for word in word_list]
+        self.nodes = [ WordNode(word) for word in word_list]
 
         node_combinations = product(self.nodes, self.nodes)
 
@@ -229,7 +242,6 @@ class WordGraph:
             if a_node == b_node:
                 continue
 
-            # TODO, change to linkable letter linking for v2
             for a_idx, char in enumerate(a_node.word):
                 matches = [m for m in re.finditer(char, b_node.word)]
                 for m in matches:
@@ -248,44 +260,66 @@ class WordGraph:
                         linked_node=a_node,
                     ))
 
-    def generate_all_pathes(self) -> List[List[WordNode]]:
-        """Should generate all possible pathes.
-        
-        Maybe implement as a WordPath
-        """
-
-        """
-        Algorithm:
-
-        for each node in nodes:
-            pathfinder(node)
-
-        pathfinder(node):
-            used_links = []
-            if all_nodes_are_visited:
-                if len(used_links) == len(nodes) - 1:
-                    return pathes_that_were_found
-                return no_pathes_were_found
-
-            for node in nodes:
-                search(node, used_links[:])
-
-        search(node, used_links):
-            for link in node.links:
-                if not link.used:
-                    link.used = True
-                    used_links.append(link)
-                    search(link.nodeB, used_links[:])
-                    used_links.pop()
-                    link.used = False
-        """
-        return []
-
     def __repr__(self):
         s = ""
         for node in self.nodes:
             s += str(node)
         return s
+
+def generate_all_pathes(input_graph: WordGraph) -> List[List[WordNode]]:
+    """
+    Should generate all possible pathes.
+    
+    Maybe implement as a WordPath
+    """
+
+    g = deepcopy(input_graph)
+    pathes_matrix = []
+    for node_idx, _ in enumerate(input_graph.nodes):
+        pathes_for_one_root_node = pathfinder(deepcopy(input_graph), node_idx)
+        pathes_matrix.append(pathes_for_one_root_node)
+    # TODO: flatten pathes_matrix
+
+def search(
+    input_node: WordNode,
+    traversed_path: List[Tuple[WordNode, NodeLink]],
+    path_matrix,
+    linked_pairs
+):
+    print(input_node)
+    if input_node.visited:
+        path_matrix.append(traversed_path)
+        return
+    for l_idx, linkable_letter in enumerate(input_node.linkable_letters):
+        if not linkable_letter.linked:
+            for idx, link in enumerate(linkable_letter.links):
+                pair_to_link = [input_node.word, link.linked_node.word]
+                pair_to_link.sort()
+                hsh = f"{pair_to_link[0]}_{pair_to_link[1]}"
+                if not link.used and hsh not in linked_pairs:
+                    linked_pairs.add(hsh)
+                    origin_node = deepcopy(input_node)
+                    current_letter = origin_node.linkable_letters[l_idx]
+                    current_letter.linked = True
+                    current_letter.links[idx].used = True
+                    origin_node.visited = True
+                    current_path = deepcopy(traversed_path)
+                    current_path.append((origin_node, current_letter.links[idx]))
+                    next_node = current_letter.links[idx].linked_node
+                    search(next_node, current_path, path_matrix, linked_pairs)
+
+def pathfinder(graph: WordGraph, root_node_idx: int):
+    used_links = []
+    pathes_that_were_found = []
+    while not all_nodes_are_visited:
+        for node in graph.nodes:
+            partial_path_matrix = []
+            search(node, [], partial_path_matrix)
+
+    if len(used_links) == len(nodes) - 1:
+        return pathes_that_were_found
+    return [] # no pathes were found
+
 
 def generate() -> CrossWordGame:
     word_picker = WordPicker("../dictionary_builder/results/result.txt")
