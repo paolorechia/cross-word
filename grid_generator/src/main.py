@@ -1,11 +1,13 @@
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 from itertools import product
 from operator import attrgetter
 from copy import deepcopy
 import re
 import json
 import random
+
+from datetime import datetime
 
 
 @dataclass
@@ -250,7 +252,9 @@ class LinkableLetter:
         self.linked: bool = False
 
     def __repr__(self):
-        return f"LinkableLetter(char={self.char}, index={self.index}, linked={self.linked}"
+        return (
+            f"LinkableLetter(char={self.char}, index={self.index}, linked={self.linked}"
+        )
 
     def _find_mirrored_links(self):
         target_nodes = []
@@ -267,11 +271,12 @@ class LinkableLetter:
                             and link.target_node == self.parent_node
                         ):
                             if str(link) not in added_links:
-                                mirrored_links.append((deepcopy(letter), deepcopy(link)))
+                                mirrored_links.append(
+                                    (deepcopy(letter), deepcopy(link))
+                                )
                                 added_links.add(str(link))
 
         return mirrored_links
-
 
     def find_mutually_exclusive_links(self):
         """Finds mutually_exclusive for a given linkable letter."""
@@ -280,7 +285,6 @@ class LinkableLetter:
             if link.index_a == self.index:
                 mutually_exclusive.append(link)
         return mutually_exclusive
-
 
     def find_mirrored_links(self) -> List[Tuple[any, NodeLink]]:
         """Find links that are mirrored.
@@ -330,20 +334,30 @@ class WordGraph:
             s += str(node)
         return s
 
+    def generate_all_pathes(self, ignore_visited=False) -> List[List[WordNode]]:
+        """
+        Should generate all possible pathes.
 
-def generate_all_pathes(input_graph: WordGraph) -> List[List[WordNode]]:
-    """
-    Should generate all possible pathes.
+        Maybe implement as a WordPath
+        """
 
-    Maybe implement as a WordPath
-    """
-
-    g = deepcopy(input_graph)
-    pathes_matrix = []
-    for node_idx, _ in enumerate(input_graph.nodes):
-        pathes_for_one_root_node = pathfinder(deepcopy(input_graph), node_idx)
-        pathes_matrix.append(pathes_for_one_root_node)
-    # TODO: flatten pathes_matrix
+        input_graph = deepcopy(self)
+        complete_pathes = {}
+        incomplete_pathes = {}
+        t0 = datetime.now()
+        pathes_for_one_root_node: Dict[str, List[NodeLink]] = {}
+        print("Starting search!")
+        search(input_graph, 0, [], pathes_for_one_root_node, set(), ignore_visited)
+        for key, path in pathes_for_one_root_node.items():
+            if len(path) == len(input_graph.nodes) - 1:
+                complete_pathes[key] = path
+            else:
+                incomplete_pathes[key] = path
+        self.pathes = complete_pathes
+        t1 = datetime.now()
+        elapsed_time = t1 - t0
+        print(f"Elapsed time: {elapsed_time}")
+        print("Total complete pathes:", len(self.pathes))
 
 
 def search(
@@ -352,84 +366,85 @@ def search(
     traversed_path: List[NodeLink],
     path_dict,
     linked_pairs,
+    ignore_visited=False,
 ):
     graph = deepcopy(input_graph)
     input_node = graph.nodes[input_node_idx]
-    # print(linked_pairs)
-    # print("On node:", input_node)
+    print(f"Total pathes in iteration: {len(path_dict)}", end="\r")
     current_path = deepcopy(traversed_path)
-    for linkable_letter in input_node.linkable_letters:
-        if not linkable_letter.linked:
-            # print("FREE", linkable_letter, linkable_letter.links)
-            for link in linkable_letter.links:
-                pair_to_link = [input_node.word, link.target_node.word]
-                pair_to_link.sort()
-                hsh = f"{pair_to_link[0]}_{pair_to_link[1]}"
-                if not link.used and hsh not in linked_pairs:
-                    current_path = deepcopy(traversed_path)
-                    current_path.append(link)
-                    current_linked_pairs = deepcopy(linked_pairs)
-                    current_linked_pairs.add(hsh)
-                    input_node.visited = True
-                    linkable_letter.linked = True
-                    link.used = True
-                    link.parent_letter.linked = True
-                    mirrored_links = linkable_letter.find_mirrored_links()
-                    for letter, link_ in mirrored_links:
-                        letter = True
-                        link_.used = True
-                        # print("Flagging as mirrored", link_)
-                    for letter in link.target_node.linkable_letters:
-                        if letter.char == link.char and letter.index == link.index_b:
-                            links_ = letter.find_mutually_exclusive_links()
-                            for link_ in links_:
-                                # print("Flagging as mutually exclusive", link_)
-                                link_.used = True
-                    new_node_idx = -1
-                    for idx, node in enumerate(graph.nodes):
-                        if node.word == link.target_node.word:
-                            new_node_idx = idx
-                    # print(new_node_idx)
-                    search(
-                        graph,
-                        new_node_idx,
-                        current_path,
-                        path_dict,
-                        current_linked_pairs,
-                    )
-                    # Reset state for backtracking
-                    input_node.visited = False
-                    linkable_letter.linked = False
-                    link.used = False
-                    link.parent_letter.linked = False
-                    for letter, link_ in mirrored_links:
-                        letter = False
-                        link_.used = False
-                        # print("Flagging as mirrored", link_)
-                    for letter in link.target_node.linkable_letters:
-                        if letter.char == link.char and letter.index == link.index_b:
-                            links_ = letter.find_mutually_exclusive_links()
-                            for link_ in links_:
-                                # print("Flagging as mutually exclusive", link_)
-                                link_.used = False
-    # print("Out of choices, ended")
+    if not input_node.visited:
+        for linkable_letter in input_node.linkable_letters:
+            if not linkable_letter.linked:
+                # print("FREE", linkable_letter, linkable_letter.links)
+                for link in linkable_letter.links:
+                    if ignore_visited and link.target_node.visited:
+                        continue
+                    pair_to_link = [input_node.word, link.target_node.word]
+                    pair_to_link.sort()
+                    hsh = f"{pair_to_link[0]}_{pair_to_link[1]}"
+                    if not link.used and hsh not in linked_pairs:
+                        current_path = deepcopy(traversed_path)
+                        current_path.append(link)
+                        current_linked_pairs = deepcopy(linked_pairs)
+                        current_linked_pairs.add(hsh)
+                        input_node.visited = True
+                        linkable_letter.linked = True
+                        link.used = True
+                        link.parent_letter.linked = True
+                        mirrored_links = linkable_letter.find_mirrored_links()
+                        for letter, link_ in mirrored_links:
+                            letter = True
+                            link_.used = True
+                            # print("Flagging as mirrored", link_)
+                        for letter in link.target_node.linkable_letters:
+                            if (
+                                letter.char == link.char
+                                and letter.index == link.index_b
+                            ):
+                                links_ = letter.find_mutually_exclusive_links()
+                                for link_ in links_:
+                                    # print("Flagging as mutually exclusive", link_)
+                                    link_.used = True
+                        new_node_idx = -1
+                        for idx, node in enumerate(graph.nodes):
+                            if node.word == link.target_node.word:
+                                new_node_idx = idx
+                        # print(new_node_idx)
+                        search(
+                            graph,
+                            new_node_idx,
+                            current_path,
+                            path_dict,
+                            current_linked_pairs,
+                            ignore_visited,
+                        )
+                        # Reset state for backtracking
+                        input_node.visited = False
+                        linkable_letter.linked = False
+                        link.used = False
+                        link.parent_letter.linked = False
+                        for letter, link_ in mirrored_links:
+                            letter = False
+                            link_.used = False
+                            # print("Flagging as mirrored", link_)
+                        for letter in link.target_node.linkable_letters:
+                            if (
+                                letter.char == link.char
+                                and letter.index == link.index_b
+                            ):
+                                links_ = letter.find_mutually_exclusive_links()
+                                for link_ in links_:
+                                    # print("Flagging as mutually exclusive", link_)
+                                    link_.used = False
+        # print("Out of choices, ended")
+    # else:
+    #     print("Skipping!")
     path_to_key = path_to_string(current_path)
     path_dict[path_to_key] = current_path
 
+
 def path_to_string(path: List[NodeLink]):
     return "--".join([str(p) for p in path])
-
-def pathfinder(graph: WordGraph, root_node_idx: int):
-    used_links = []
-    pathes_that_were_found = []
-    while not all_nodes_are_visited:
-        for node in graph.nodes:
-            partial_path_dict = []
-            search(node, [], partial_path_dict)
-
-    if len(used_links) == len(nodes) - 1:
-        return pathes_that_were_found
-    return []  # no pathes were found
 
 
 def generate() -> CrossWordGame:

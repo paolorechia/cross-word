@@ -10,7 +10,7 @@ from grid_generator.src.main import (
     WordGraph,
     WordOrientation,
     search,
-    path_to_string
+    path_to_string,
 )
 
 sample_json_word_dict = [
@@ -219,9 +219,26 @@ def test_search_on_graph():
         print(f"Path {key}\n----------------------------------")
         print(item)
         print(f"\n----------------------------------\n")
-    assert len(partial_path_dict) == 7
-    assert False
+    assert len(partial_path_dict) == 8
 
+
+# def test_generate_all_pathes():
+#     input_list = ["anel", "animal", "ato"]
+#     graph = WordGraph(input_list)
+#     graph.generate_all_pathes()
+#     for key in graph.pathes.keys():
+#         print(key)
+#     assert len(graph.pathes) == 12
+#     assert False
+
+
+def test_generate_all_pathes_bigger_dictionary():
+    input_list = [ w["word"] for w in sample_json_word_dict ][:4]
+    print(input_list)
+    graph = WordGraph(input_list)
+    graph.generate_all_pathes()
+    # print(len(graph.pathes))
+    assert False
 
 if __name__ == "__main__":
     unittest.main()
