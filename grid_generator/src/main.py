@@ -335,7 +335,7 @@ class WordGraph:
         return s
 
     def generate_all_pathes(
-        self, max_pathes=100, ignore_visited=False
+        self, max_pathes=100, ignore_visited=False, randomized=False
     ) -> List[List[WordNode]]:
         """
         Should generate all possible pathes.
@@ -349,7 +349,12 @@ class WordGraph:
         t0 = datetime.now()
         pathes_for_one_root_node: Dict[str, List[NodeLink]] = {}
         print("Starting search!")
-        search(
+        if randomized_search:
+            fn = randomized_search
+            ignore_visited = 1000  # H4ckz
+        else:
+            fn = search
+        fn(
             input_graph,
             0,
             [],
@@ -466,6 +471,79 @@ def search(
     # else:
     #     print("Skipping!")
 
+def randomized_search(
+    input_graph,
+    current_iteration,
+    traversed_path: List[NodeLink],
+    path_dict,
+    linked_pairs,
+    target_len,
+    max_pathes=10,
+    max_iterations=1000,
+):
+    graph = deepcopy(input_graph)
+    current_path = deepcopy(traversed_path)
+    print(f"{len(path_dict)} total pathes found in iteration {current_iteration}.", end="\r")
+    while len(path_dict) < max_pathes and current_iteration < max_iterations:
+        input_node = random.choice(graph.nodes)
+        if not input_node.visited:
+            linkable_letter = random.choice(input_node.linkable_letters)
+            if linkable_letter.links and not linkable_letter.linked:
+                link = random.choice(linkable_letter.links)
+                pair_to_link = [input_node.word, link.target_node.word]
+                pair_to_link.sort()
+                hsh = f"{pair_to_link[0]}_{pair_to_link[1]}"
+                if not link.used and hsh not in linked_pairs:
+                    current_path = deepcopy(traversed_path)
+                    current_path.append(link)
+                    current_linked_pairs = deepcopy(linked_pairs)
+                    current_linked_pairs.add(hsh)
+                    input_node.visited = True
+                    linkable_letter.linked = True
+                    link.used = True
+                    link.parent_letter.linked = True
+                    mirrored_links = linkable_letter.find_mirrored_links()
+                    for letter, link_ in mirrored_links:
+                        letter = True
+                        link_.used = True
+                    for letter in link.target_node.linkable_letters:
+                        if (
+                            letter.char == link.char
+                            and letter.index == link.index_b
+                        ):
+                            links_ = letter.find_mutually_exclusive_links()
+                            for link_ in links_:
+                                link_.used = True
+                    if len(current_path) == target_len:
+                        print(f"Found a complete path at length: {len(path_dict)}", end="\r")
+                        path_to_key = path_to_string(current_path)
+                        path_dict[path_to_key] = current_path
+                        return
+                    randomized_search(
+                        graph,
+                        current_iteration + 1,
+                        current_path,
+                        path_dict,
+                        current_linked_pairs,
+                        target_len,
+                        max_pathes,
+                        max_iterations,
+                    )
+                    input_node.visited = False
+                    linkable_letter.linked = False
+                    link.used = False
+                    link.parent_letter.linked = False
+                    for letter, link_ in mirrored_links:
+                        letter = False
+                        link_.used = False
+                    for letter in link.target_node.linkable_letters:
+                        if (
+                            letter.char == link.char
+                            and letter.index == link.index_b
+                        ):
+                            links_ = letter.find_mutually_exclusive_links()
+                            for link_ in links_:
+                                link_.used = False
 
 
 def path_to_string(path: List[NodeLink]):
