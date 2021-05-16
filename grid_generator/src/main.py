@@ -334,7 +334,9 @@ class WordGraph:
             s += str(node)
         return s
 
-    def generate_all_pathes(self, ignore_visited=False) -> List[List[WordNode]]:
+    def generate_all_pathes(
+        self, max_pathes=100, ignore_visited=False
+    ) -> List[List[WordNode]]:
         """
         Should generate all possible pathes.
 
@@ -347,7 +349,16 @@ class WordGraph:
         t0 = datetime.now()
         pathes_for_one_root_node: Dict[str, List[NodeLink]] = {}
         print("Starting search!")
-        search(input_graph, 0, [], pathes_for_one_root_node, set(), ignore_visited)
+        search(
+            input_graph,
+            0,
+            [],
+            pathes_for_one_root_node,
+            set(),
+            len(input_graph.nodes) - 1,
+            max_pathes,
+            ignore_visited,
+        )
         for key, path in pathes_for_one_root_node.items():
             if len(path) == len(input_graph.nodes) - 1:
                 complete_pathes[key] = path
@@ -366,11 +377,16 @@ def search(
     traversed_path: List[NodeLink],
     path_dict,
     linked_pairs,
+    target_len,
+    max_pathes=100,
     ignore_visited=False,
 ):
     graph = deepcopy(input_graph)
     input_node = graph.nodes[input_node_idx]
     print(f"Total pathes in iteration: {len(path_dict)}", end="\r")
+    if len(path_dict) >= max_pathes:
+        print(f"Reached max pathes: {len(path_dict)}", end="\r")
+        return
     current_path = deepcopy(traversed_path)
     if not input_node.visited:
         for linkable_letter in input_node.linkable_letters:
@@ -378,6 +394,8 @@ def search(
                 # print("FREE", linkable_letter, linkable_letter.links)
                 for link in linkable_letter.links:
                     if ignore_visited and link.target_node.visited:
+                        continue
+                    if random.randint(0, 100) >= 50:
                         continue
                     pair_to_link = [input_node.word, link.target_node.word]
                     pair_to_link.sort()
@@ -410,12 +428,20 @@ def search(
                             if node.word == link.target_node.word:
                                 new_node_idx = idx
                         # print(new_node_idx)
+                        if len(current_path) == target_len:
+                            print(f"Found a complete path at length: {len(path_dict)}", end="\r")
+                            path_to_key = path_to_string(current_path)
+                            path_dict[path_to_key] = current_path
+                            return
+
                         search(
                             graph,
                             new_node_idx,
                             current_path,
                             path_dict,
                             current_linked_pairs,
+                            target_len,
+                            max_pathes,
                             ignore_visited,
                         )
                         # Reset state for backtracking
@@ -439,8 +465,7 @@ def search(
         # print("Out of choices, ended")
     # else:
     #     print("Skipping!")
-    path_to_key = path_to_string(current_path)
-    path_dict[path_to_key] = current_path
+
 
 
 def path_to_string(path: List[NodeLink]):
