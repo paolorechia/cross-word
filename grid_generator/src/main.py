@@ -306,7 +306,7 @@ class CrossWordGame:
                 print(f"Iteration: {i}")
                 print("Picking random words...")
                 self.words = self.word_picker.pick_n_random_words(
-                    self.num_words, max_length=6, min_length=4
+                    self.num_words, max_length=8, min_length=4
                 )
                 print("Building word graph...")
 
@@ -655,15 +655,15 @@ class WordGraph:
         t0 = datetime.now()
         pathes_for_one_root_node: Dict[str, List[NodeLink]] = {}
         print("Starting search!")
-
         queues = []
+        processes = []
         for i in range(threads):
             queue = mp.Queue()
             args = (
-                input_graph,
+                deepcopy(input_graph),
                 0,
                 [],
-                pathes_for_one_root_node,
+                deepcopy(pathes_for_one_root_node),
                 set(),
                 len(input_graph.nodes) - 1,
                 queue,
@@ -672,14 +672,20 @@ class WordGraph:
             )
             queues.append(queue)
             p = mp.Process(target=parallelized_randomized_search, args=args)
+            processes.append(p)
+            print(f"Starting worker {i}")
             p.start()
-            p.join()
-            print(f"Finished worker {i}")
 
+        print("Collecting results...")
         super_result = {}
         for i in range(threads):
             result = queues[i].get()
             super_result.update(result)
+
+        for i in range(threads):
+            processes[i].join()
+            print(f"Finished worker {i}")
+
         for key, path in super_result.items():
             if len(path) == len(input_graph.nodes) - 1:
                 complete_pathes[key] = path
@@ -805,7 +811,7 @@ def parallelized_randomized_search(
     max_pathes=10,
     max_iterations=1000,
 ):
-    print("Working started!")
+    # print("Worker started!")
     randomized_search(
         input_graph,
         current_iteration,
@@ -817,7 +823,7 @@ def parallelized_randomized_search(
         max_iterations,
     )
     mp_queue.put(path_dict)
-    print("Working ended!")
+    # print("Worker ended!")
 
 
 def randomized_search(
