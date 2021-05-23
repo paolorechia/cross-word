@@ -43,14 +43,14 @@ def test_generate():
         "builtins.open", mock_open(read_data=json.dumps(sample_json_word_dict))
     ) as mock_file:
         game: CrossWordGame = generate()
-        # print(game)
+        print(game)
         # print([w.word for w in game.placed_words])
         assert (
-            len(game.placed_words)
+            len(game.grid.placed_words)
             == game.num_vertical_words + game.num_horizontal_words
         )
         # assert all words are in grid
-        for pword in game.placed_words:
+        for pword in game.grid.placed_words:
             i = 0
             if pword.orientation == WordOrientation.Horizontal:
                 assert pword.y_start == pword.y_end
@@ -182,6 +182,7 @@ def test_mirrored_links():
                     assert link.target_node.word == "anel"
                     assert link.origin_node.word == "ato"
 
+
 def test_find_mutually_exclusive():
     input_list = ["anel", "animal", "ato"]
     graph = WordGraph(input_list)
@@ -210,35 +211,31 @@ def test_find_mutually_exclusive():
                             assert tlink.target_node.word == "ato"
                             assert tlink.origin_node.word == "animal"
 
-def test_search_on_graph():
+
+def test_randomize_search():
+    words = [w["word"] for w in sample_json_word_dict]
+    subset = words[:4]
+    print(f"Testing subset of {len(subset)} words")
+    graph = WordGraph(subset)
+    graph.generate_all_pathes(max_pathes=10, randomized=True)
+    assert len(graph.pathes) == 10
+
+
+def test_generate_all_pathes():
     input_list = ["anel", "animal", "ato"]
     graph = WordGraph(input_list)
-    partial_path_dict = {}
-    search(graph, 0, [], partial_path_dict, set())
-    for key, item in enumerate(partial_path_dict):
-        print(f"Path {key}\n----------------------------------")
-        print(item)
-        print(f"\n----------------------------------\n")
-    assert len(partial_path_dict) == 8
+    pathes = graph.generate_all_pathes(max_pathes=12, ignore_visited=False)
+    for key in pathes.keys():
+        print(key)
+    assert len(pathes) == 12
 
 
-# def test_generate_all_pathes():
-#     input_list = ["anel", "animal", "ato"]
+# def test_generate_all_pathes_bigger_dictionary():
+#     input_list = [w["word"] for w in sample_json_word_dict][:4]
+#     print(input_list)
 #     graph = WordGraph(input_list)
-#     graph.generate_all_pathes()
-#     for key in graph.pathes.keys():
-#         print(key)
-#     assert len(graph.pathes) == 12
-#     assert False
+#     graph.generate_all_pathes(max_pathes=12, ignore_visited=False)
 
-
-def test_generate_all_pathes_bigger_dictionary():
-    input_list = [ w["word"] for w in sample_json_word_dict ][:4]
-    print(input_list)
-    graph = WordGraph(input_list)
-    graph.generate_all_pathes()
-    # print(len(graph.pathes))
-    assert False
 
 if __name__ == "__main__":
     unittest.main()

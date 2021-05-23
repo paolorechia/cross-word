@@ -76,7 +76,7 @@ class WordInGrid:
     y_start: int
     y_end: int
     hints: List[str]
-    word: Optional[str] = None
+    word: str
     orientation: WordOrientation = WordOrientation.Horizontal
 
 
@@ -85,19 +85,31 @@ class Grid:
         self.x_size = x_size
         self.y_size = y_size
         self.grid = []
+        self.placed_words: List[WordInGrid] = []
         for y in range(y_size):
             self.grid.append([])
             for _ in range(x_size):
                 self.grid[y].append(" ")
 
-    def insert_horizontal_word_at_pos(self, word, x, y):
-        row = self.grid[y]
-        for idx, w in enumerate(word):
-            row[x + idx] = w
+    def insert_word(self, word_in_grid):
+        if word_in_grid.orientation == WordOrientation.Horizontal:
+            self.insert_horizontal_word(word_in_grid)
+        else:
+            self.insert_vertical_word(word_in_grid)
 
-    def insert_vertical_word_at_pos(self, word, x, y):
-        for idx, w in enumerate(word):
-            self.grid[y + idx][x] = w
+    def insert_horizontal_word(self, word_in_grid):
+        row = self.grid[word_in_grid.y_start]
+        for idx, w in enumerate(word_in_grid.word):
+            row[word_in_grid.x_start + idx] = w
+        self.placed_words.append(word_in_grid)
+
+    def insert_vertical_word(self, word_in_grid):
+        for idx, w in enumerate(word_in_grid.word):
+            self.grid[word_in_grid.y_start + idx][word_in_grid.y_start] = w
+        self.placed_words.append(word_in_grid)
+
+    def resize_to_minimum_size(self):
+        """Resizes to minimum rectangular dimensions."""
 
     def _row_separator(self):
         s = ""
@@ -119,47 +131,75 @@ class CrossWordGame:
     def __init__(
         self,
         word_picker: WordPicker,
-        grid: Grid,
         horizontal_words=10,
         vertical_words=10,
         seed_orientation=WordOrientation.Horizontal,
     ):
+        self.grid: Optional[Grid] = None
         self.word_picker = word_picker
-        self.grid = grid
-        self.placed_words: List[WordInGrid] = []
         self.num_horizontal_words = horizontal_words
         self.num_vertical_words = vertical_words
         self.words = self.word_picker.pick_n_random_words(
             horizontal_words + vertical_words, max_length=10
         )
         self.word_graph = WordGraph(self.words)
-        # print(self.word_graph)
+        self.word_graph.generate_all_pathes(max_pathes=10, randomized=True)
+        print(self.word_graph.pathes[0])
+        self.word_path_to_grid(self.word_graph.pathes[0])
 
     def to_json(self):
         return json.dumps({})
 
-    def word_path_to_grid(self):
+    def word_path_to_grid(self, word_path: List[any]):
+        g = Grid(30, 30)
+        self.grid = g
+        node_link: NodeLink = word_path[0]
+        raw_word = node_link.origin_node.word
+        word_in_grid = WordInGrid(
+            x_start=(self.grid.x_size - len(raw_word)) // 2,
+            x_end=((self.grid.x_size - len(raw_word)) // 2) + len(raw_word),
+            y_start=(self.grid.x_size // 2),
+            y_end=(self.grid.x_size // 2),
+            hints=[],
+            word=raw_word,
+            orientation=WordOrientation.Horizontal,
+        )
+        self.grid.insert_word(word_in_grid)
+        previous_word = word_in_grid
+        new_orientation = (
+            WordOrientation.Horizontal
+            if previous_word.orientation == WordOrientation.Vertical
+            else WordOrientation.Vertical
+        )
+        new_word = node_link.target_node.word
+        print(new_word)
+        if new_orientation == WordOrientation.Vertical:
+            new_x_start = node_link.index_a
+            new_x_end = node_link.index_a
+            new_y_start = previous_word.y_start - node_link.index_b
+            new_y_end = new_y_start + len(new_word)
+        else:
+            new_x_start = previous_word.x_start - node_link.index_b
+            new_x_end = new_x_start + len(new_word)
+            new_y_start = node_link.index_a
+            new_y_end = node_link.index_a
+
+        new_word_in_grid = WordInGrid(
+            x_start=new_x_start,
+            x_end=new_x_end,
+            y_start=new_y_start,
+            y_end=new_y_end,
+            hints=[],
+            word=new_word,
+            orientation=new_orientation,
+        )
+        self.grid.insert_word(new_word_in_grid)
+
+        # new_word = WordInGrid(
+        #     x_start=
+        # )
+
         """Insert a word path into a grid."""
-
-    def find_minimum_grid_size(self):
-        """Translade the grid into origin and find minimum rectangular dimensions."""
-
-    # def _seed_word(self, seed_orientation):
-    #     if seed_orientation == WordOrientation.Horizontal:
-    #         raw_word = self.word_picker.pick_random_unique(self.grid.x_size)
-    #         word_in_grid = WordInGrid(
-    #             x_start=(self.grid.x_size - len(raw_word)) // 2,
-    #             x_end=((self.grid.x_size - len(raw_word)) // 2) + len(raw_word),
-    #             y_start=(self.grid.x_size // 2),
-    #             y_end=(self.grid.x_size // 2),
-    #             hints=[],
-    #             word=raw_word,
-    #             orientation=WordOrientation.Horizontal
-    #         )
-    #         self.grid.insert_horizontal_word_at_pos(word=raw_word, x=word_in_grid.x_start, y=word_in_grid.y_start)
-    #         self.placed_words.append(word_in_grid)
-    #     else:
-    #         raise NotImplementedError("TODO!")
 
     # def _expand_seed_with_backtracking(self):
     #     seeded_word = self.placed_words[0]
@@ -213,8 +253,6 @@ class WordNode:
 
     def __repr__(self):
         s = f"Node ({self.word})\n"
-        # for link in self.links:
-        #     s += f"-------> {str(link)}\n"
         return s
 
 
@@ -336,7 +374,7 @@ class WordGraph:
 
     def generate_all_pathes(
         self, max_pathes=100, ignore_visited=False, randomized=False
-    ) -> List[List[WordNode]]:
+    ) -> List[List[NodeLink]]:
         """
         Should generate all possible pathes.
 
@@ -369,11 +407,14 @@ class WordGraph:
                 complete_pathes[key] = path
             else:
                 incomplete_pathes[key] = path
-        self.pathes = complete_pathes
         t1 = datetime.now()
         elapsed_time = t1 - t0
         print(f"Elapsed time: {elapsed_time}")
-        print("Total complete pathes:", len(self.pathes))
+        print("Total complete pathes:", len(complete_pathes))
+        self.pathes = []
+        for _, item in complete_pathes.items():
+            self.pathes.append(item)
+        return complete_pathes
 
 
 def search(
@@ -434,7 +475,10 @@ def search(
                                 new_node_idx = idx
                         # print(new_node_idx)
                         if len(current_path) == target_len:
-                            print(f"Found a complete path at length: {len(path_dict)}", end="\r")
+                            print(
+                                f"Found a complete path at length: {len(path_dict)}",
+                                end="\r",
+                            )
                             path_to_key = path_to_string(current_path)
                             path_dict[path_to_key] = current_path
                             return
@@ -471,6 +515,7 @@ def search(
     # else:
     #     print("Skipping!")
 
+
 def randomized_search(
     input_graph,
     current_iteration,
@@ -483,7 +528,10 @@ def randomized_search(
 ):
     graph = deepcopy(input_graph)
     current_path = deepcopy(traversed_path)
-    print(f"{len(path_dict)} total pathes found in iteration {current_iteration}.", end="\r")
+    print(
+        f"{len(path_dict)} total pathes found in iteration {current_iteration}.",
+        end="\r",
+    )
     while len(path_dict) < max_pathes and current_iteration < max_iterations:
         input_node = random.choice(graph.nodes)
         if not input_node.visited:
@@ -507,15 +555,15 @@ def randomized_search(
                         letter = True
                         link_.used = True
                     for letter in link.target_node.linkable_letters:
-                        if (
-                            letter.char == link.char
-                            and letter.index == link.index_b
-                        ):
+                        if letter.char == link.char and letter.index == link.index_b:
                             links_ = letter.find_mutually_exclusive_links()
                             for link_ in links_:
                                 link_.used = True
                     if len(current_path) == target_len:
-                        print(f"Found a complete path at length: {len(path_dict)}", end="\r")
+                        print(
+                            f"Found a complete path at length: {len(path_dict)}",
+                            end="\r",
+                        )
                         path_to_key = path_to_string(current_path)
                         path_dict[path_to_key] = current_path
                         return
@@ -537,10 +585,7 @@ def randomized_search(
                         letter = False
                         link_.used = False
                     for letter in link.target_node.linkable_letters:
-                        if (
-                            letter.char == link.char
-                            and letter.index == link.index_b
-                        ):
+                        if letter.char == link.char and letter.index == link.index_b:
                             links_ = letter.find_mutually_exclusive_links()
                             for link_ in links_:
                                 link_.used = False
@@ -552,8 +597,8 @@ def path_to_string(path: List[NodeLink]):
 
 def generate() -> CrossWordGame:
     word_picker = WordPicker("../dictionary_builder/results/result.txt")
-    g = Grid(x_size=30, y_size=30)
-    return CrossWordGame(word_picker, g, horizontal_words=10, vertical_words=10)
+    game = CrossWordGame(word_picker, horizontal_words=3, vertical_words=3)
+    return game
 
 
 if __name__ == "__main__":
