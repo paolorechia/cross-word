@@ -47,7 +47,7 @@ def test_generate():
         # print([w.word for w in game.placed_words])
         assert (
             len(game.grid.placed_words)
-            == game.num_vertical_words + game.num_horizontal_words
+            == len(game.words)
         )
         # assert all words are in grid
         for pword in game.grid.placed_words:
@@ -62,7 +62,7 @@ def test_generate():
                 for y in range(pword.y_start, pword.y_end):
                     assert game.grid.grid[y][pword.x_start] == pword.word[i]
                     i += 1
-        assert False
+        # assert False
 
 
 def test_build_wordgraph():

@@ -80,6 +80,10 @@ class WordInGrid:
     orientation: WordOrientation = WordOrientation.Horizontal
 
 
+class GridConflictingCell(Exception):
+    """Exception for flagging inappropriate cell reuse."""
+
+
 class Grid:
     def __init__(self, x_size=20, y_size=20):
         self.x_size = x_size
@@ -91,6 +95,8 @@ class Grid:
             for _ in range(x_size):
                 self.grid[y].append(" ")
 
+        self.used_pos = set()
+
     def insert_word(self, word_in_grid):
         print("Inserting ", word_in_grid)
         if word_in_grid.orientation == WordOrientation.Horizontal:
@@ -101,12 +107,23 @@ class Grid:
     def insert_horizontal_word(self, word_in_grid):
         row = self.grid[word_in_grid.y_start]
         for idx, w in enumerate(word_in_grid.word):
-            row[word_in_grid.x_start + idx] = w
+            x = word_in_grid.x_start + idx
+            coord = f"({x},{row})"
+            if coord in self.used_pos:
+                raise GridConflictingCell(f"Cell already used: {coord}")
+            self.used_pos.add(coord)
+            row[x] = w
         self.placed_words.append(word_in_grid)
 
     def insert_vertical_word(self, word_in_grid):
+        x = word_in_grid.x_start
         for idx, w in enumerate(word_in_grid.word):
-            self.grid[word_in_grid.y_start + idx][word_in_grid.x_start] = w
+            y = word_in_grid.y_start + idx
+            coord = f"({x},{y})"
+            if coord in self.used_pos:
+                raise GridConflictingCell(f"Cell already used: {coord}")
+            self.used_pos.add(coord)
+            self.grid[y][x] = w
         self.placed_words.append(word_in_grid)
 
     def resize_to_minimum_size(self):
@@ -128,30 +145,41 @@ class Grid:
         return s
 
 
+class InvalidWordSetError(Exception):
+    """WordSet did not yield a valid grid."""
+
+
 class CrossWordGame:
     def __init__(
         self,
         word_picker: WordPicker,
-        horizontal_words=10,
-        vertical_words=10,
+        num_words=10,
         seed_orientation=WordOrientation.Horizontal,
     ):
         self.grid: Optional[Grid] = None
         self.word_picker = word_picker
-        self.num_horizontal_words = horizontal_words
-        self.num_vertical_words = vertical_words
         self.words = self.word_picker.pick_n_random_words(
-            horizontal_words + vertical_words, max_length=10
+            num_words, max_length=10
         )
         self.word_graph = WordGraph(self.words)
         self.word_graph.generate_all_pathes(max_pathes=10, randomized=True)
-        print(self.word_graph.pathes[0])
-        self.node_links_to_grid(self.word_graph.pathes[0])
+        self.generate_grid()
 
     def to_json(self):
         return json.dumps({})
 
-    def node_links_to_grid(self, links: List[any]):
+    def generate_grid(self):
+        for path in self.word_graph.pathes:
+            try:
+                g = self._node_links_to_grid(path)
+                if len(g.placed_words) == len(self.words):
+                    self.grid = g
+                    return
+            except GridConflictingCell as e:
+                print(e)
+        raise InvalidWordSetError("Invalid word set/pathes, could not create a grid.")
+
+    def _node_links_to_grid(self, links: List[any]):
         g = Grid(30, 30)
         self.grid = g
         # Take first link and use it to seed the Grid
@@ -170,13 +198,18 @@ class CrossWordGame:
         words_in_grid = {node_link.origin_node.word: word_in_grid}
         used_links = set()
         # Insert remainining links.
-        while len(used_links) < len(links):
+        j = 0
+        while len(used_links) < len(links) and j < len(links):
             # Find a link that was not yet consumed
             # And that is connected to a word that is already in the grid.
+            j += 1            
             print(len(used_links), len(links), words_in_grid)
             for idx, link in enumerate(links):
                 if idx not in used_links:
-                    if link.origin_node.word in words_in_grid and link.target_node.word not in words_in_grid:
+                    if (
+                        link.origin_node.word in words_in_grid
+                        and link.target_node.word not in words_in_grid
+                    ):
                         # Add link words to grid
                         used_links.add(idx)
                         previous_word = words_in_grid[link.origin_node.word]
@@ -208,7 +241,10 @@ class CrossWordGame:
                         )
                         self.grid.insert_word(new_word_in_grid)
                         words_in_grid[link.target_node.word] = new_word_in_grid
-                    elif link.target_node.word in words_in_grid and link.origin_node.word not in words_in_grid:
+                    elif (
+                        link.target_node.word in words_in_grid
+                        and link.origin_node.word not in words_in_grid
+                    ):
                         used_links.add(idx)
                         previous_word = words_in_grid[link.target_node.word]
                         new_orientation = (
@@ -240,7 +276,7 @@ class CrossWordGame:
                         )
                         self.grid.insert_word(new_word_in_grid)
                         words_in_grid[link.origin_node.word] = new_word_in_grid
-
+        return g
         # new_word = WordInGrid(
         #     x_start=
         # )
@@ -641,7 +677,7 @@ def path_to_string(path: List[NodeLink]):
 
 def generate() -> CrossWordGame:
     word_picker = WordPicker("../dictionary_builder/results/result.txt")
-    game = CrossWordGame(word_picker, horizontal_words=3, vertical_words=3)
+    game = CrossWordGame(word_picker, num_words=6)
     return game
 
 
