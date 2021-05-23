@@ -15,27 +15,46 @@ class WordEntry:
     word: str
     lemma: str
     upos: str
+    freq: int
     feats: List[str]
     ant: List[str]
     syn: List[str]
     sentences: List[str]
     description: List[str]
 
-    def get_hints_from_word(self):
-        return ["TODO HINTS"]
-
+    def get_hints_for_word(self):
+        hints = []
+        if self.ant:
+            hints.append(("ANTONYMS", self.ant))
+        if self.syn:
+            hints.append(("SYNONYMS", self.syn))
+        if self.sentences:
+            for s in self.sentences:
+                s2 = re.sub(self.word, "", s.lower())
+                hints.append(("SENTENCE", s2))
+        if self.description:
+            for d in self.description:
+                d2 = re.sub(self.word, "", d.lower())
+                hints.append(("DESCRIPTION", d2))
+        return hints
 
 class WordDictionary:
     def __init__(self, words_list):
         self.words: List[WordEntry] = []
-        self.hashmap = {}
         for word_dict in words_list:
             if "status_code" in word_dict:
                 del word_dict["status_code"]
             word = WordEntry(**word_dict)
             word.word = unidecode(word.word)
             self.words.append(word)
+        self.words.sort(key=attrgetter("freq"), reverse=True)
+        self.hashmap = {}
+        for word in self.words:
             self.hashmap[word.word] = word
+
+    def get_hints_for_word(self, word):
+        word_entry = self.hashmap[word]
+        return word_entry.get_hints_for_word()
 
     def to_unique_list(self):
         s = set()
@@ -45,22 +64,23 @@ class WordDictionary:
 
 
 class WordPicker:
-    def __init__(self, filename):
+    def __init__(self, filename, most_frequents=10000, stop_word_offset=200):
         with open(filename, "r") as fp:
             self.word_dictionary: WordDictionary = WordDictionary(json.load(fp))
         self.unique_words = self.word_dictionary.to_unique_list()
+        self.unique_words = self.unique_words[stop_word_offset:most_frequents]
         self.picked_words = set()
 
-    def pick_n_random_words(self, num_words, max_length=10):
+    def pick_n_random_words(self, num_words, max_length=10, min_length=4):
         """Reset picked words and pick n words."""
         self.picked_words = set()
         while len(self.picked_words) < num_words:
-            self.pick_random_unique(max_length=max_length)
+            self.pick_random_unique(max_length=max_length, min_length=min_length)
         return self.picked_words
 
-    def pick_random_unique(self, max_length=10):
+    def pick_random_unique(self, max_length=10, min_length=4):
         picked = self.unique_words[0]
-        while picked in self.picked_words or len(picked) > max_length:
+        while picked in self.picked_words or len(picked) > max_length or len(picked) < min_length:
             rand_int = random.randint(0, len(self.unique_words) - 1)
             picked = self.unique_words[rand_int]
         self.picked_words.add(picked)
@@ -169,20 +189,20 @@ class Grid:
             i = 0
             if pword.orientation == WordOrientation.Horizontal:
                 # Check that the boundaries are not immediately followed by letters
-                if self.grid[pword.y_start][pword.x_start - 1] != " ":
-                    return False
-                if self.grid[pword.y_start][pword.x_end + 1] != " ":
-                    return False
+                # if self.grid[pword.y_start][pword.x_start - 1] != " ":
+                #     return False
+                # if self.grid[pword.y_start][pword.x_end + 1] != " ":
+                #     return False
                 for x in range(pword.x_start, pword.x_end):
                     if not self.grid[pword.y_start][x] == pword.word[i]:
                         return False
                     i += 1
             else:
                 # Check that the boundaries are not immediately followed by letters
-                if self.grid[pword.x_start][pword.y_start - 1] != " ":
-                    return False
-                if self.grid[pword.x_start][pword.y_end + 1] != " ":
-                    return False
+                # if self.grid[pword.x_start][pword.y_start - 1] != " ":
+                #     return False
+                # if self.grid[pword.x_start][pword.y_end + 1] != " ":
+                #     return False
                 for y in range(pword.y_start, pword.y_end):
                     if not self.grid[y][pword.x_start] == pword.word[i]:
                         return False
@@ -228,6 +248,13 @@ class CrossWordGame:
         raise NotImplementedError()
         return json.dumps({})
 
+    def get_hints(self):
+        hints = []
+        for pword in self.grid.placed_words:
+            coord = (pword.x_start, pword.y_start)
+            hints.append((coord,self.word_picker.word_dictionary.get_hints_for_word(pword.word)))
+        return hints
+
     def generate_game(self):
         max_iterations = 100
         i = 0
@@ -237,7 +264,7 @@ class CrossWordGame:
                 i += 1
                 print(f"Iteration: {i}")
                 self.words = self.word_picker.pick_n_random_words(
-                    self.num_words, max_length=6
+                    self.num_words, max_length=6, min_length=4
                 )
                 self.word_graph = WordGraph(self.words)
                 self.word_graph.generate_all_pathes(
@@ -747,7 +774,7 @@ def path_to_string(path: List[NodeLink]):
 
 
 def generate(num_words=3, max_pathes=10) -> CrossWordGame:
-    word_picker = WordPicker("../dictionary_builder/results/result.txt")
+    word_picker = WordPicker("../dictionary_builder/results/result.txt", stop_word_offset=0)
     game = CrossWordGame(word_picker, num_words=num_words, max_pathes=max_pathes)
     print(game)
     return game
