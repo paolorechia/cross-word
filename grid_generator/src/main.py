@@ -10,6 +10,7 @@ import random
 from datetime import datetime
 from unidecode import unidecode
 
+
 @dataclass
 class WordEntry:
     word: str
@@ -30,13 +31,20 @@ class WordEntry:
             hints.append(("SYNONYMS", self.syn))
         if self.sentences:
             for s in self.sentences:
-                s2 = re.sub(self.word, "", s.lower())
-                hints.append(("SENTENCE", s2))
-        if self.description:
-            for d in self.description:
-                d2 = re.sub(self.word, "", d.lower())
-                hints.append(("DESCRIPTION", d2))
+                if s:
+                    if self.word in s.lower():
+                        s2 = re.sub(self.word, "__", s.lower())
+                        hints.append(("SENTENCE", s2))
+                else:
+                    hints.append(("SENTENCE", s))
+        # TODO: fix dataset to include decent descriptions
+        # if self.description:
+        #     for d in self.description:
+        #         if s:
+        #             d2 = re.sub(self.word, "__", d.lower())
+        #             hints.append(("DESCRIPTION", d2))
         return hints
+
 
 class WordDictionary:
     def __init__(self, words_list):
@@ -80,7 +88,12 @@ class WordPicker:
 
     def pick_random_unique(self, max_length=10, min_length=4):
         picked = self.unique_words[0]
-        while picked in self.picked_words or len(picked) > max_length or len(picked) < min_length:
+        while (
+            picked in self.picked_words
+            or len(picked) > max_length
+            or len(picked) < min_length
+            or not self.word_dictionary.get_hints_for_word(picked)
+        ):
             rand_int = random.randint(0, len(self.unique_words) - 1)
             picked = self.unique_words[rand_int]
         self.picked_words.add(picked)
@@ -106,6 +119,7 @@ class WordInGrid:
     y_end: int
     hints: List[str]
     word: str
+    order_number: int = None
     orientation: WordOrientation = WordOrientation.Horizontal
 
 
@@ -209,6 +223,30 @@ class Grid:
                     i += 1
         return True
 
+    def get_mask(self):
+        mask = []
+        for y in range(self.y_size):
+            mask.append([])
+            for _ in range(self.x_size):
+                mask[y].append("*")
+        for idx, pword in enumerate(self.placed_words):
+            pword.order_number = idx
+            if pword.orientation == WordOrientation.Horizontal:
+                y = pword.y_start
+                for x in range(pword.x_start, pword.x_end):
+                    mask[y][x] = str(idx)
+            else:
+                x = pword.x_start
+                for y in range(pword.y_start, pword.y_end):
+                    mask[y][x] = str(idx)
+        g = Grid(
+            x_size=self.x_size,
+            y_size=self.y_size
+        )
+        g.grid = mask
+        return g
+
+
     def _row_separator(self):
         s = ""
         s += "-" * ((self.x_size * 4) + 1)
@@ -251,9 +289,15 @@ class CrossWordGame:
     def get_hints(self):
         hints = []
         for pword in self.grid.placed_words:
-            coord = (pword.x_start, pword.y_start)
-            hints.append((coord,self.word_picker.word_dictionary.get_hints_for_word(pword.word)))
+            available_hints = self.word_picker.word_dictionary.get_hints_for_word(pword.word)
+            chosen_hint = random.choice(available_hints)
+            hints.append(
+                (pword.order_number, chosen_hint)
+            )
         return hints
+
+    def get_mask(self):
+        return self.grid.get_mask()
 
     def generate_game(self):
         max_iterations = 100
@@ -774,7 +818,9 @@ def path_to_string(path: List[NodeLink]):
 
 
 def generate(num_words=3, max_pathes=10) -> CrossWordGame:
-    word_picker = WordPicker("../dictionary_builder/results/result.txt", stop_word_offset=0)
+    word_picker = WordPicker(
+        "../dictionary_builder/results/result.txt", stop_word_offset=0
+    )
     game = CrossWordGame(word_picker, num_words=num_words, max_pathes=max_pathes)
     print(game)
     return game
