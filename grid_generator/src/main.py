@@ -98,7 +98,7 @@ class Grid:
         self.used_pos = set()
 
     def insert_word(self, word_in_grid):
-        print("Inserting ", word_in_grid)
+        # print("Inserting ", word_in_grid)
         if word_in_grid.orientation == WordOrientation.Horizontal:
             self.insert_horizontal_word(word_in_grid)
         else:
@@ -127,7 +127,55 @@ class Grid:
         self.placed_words.append(word_in_grid)
 
     def resize_to_minimum_size(self):
+        min_x = min([min(pword.x_start, pword.x_end) for pword in self.placed_words])
+        max_x = max([max(pword.x_start, pword.x_end) for pword in self.placed_words])
+        min_y = min([min(pword.y_start, pword.y_end) for pword in self.placed_words])
+        max_y = max([max(pword.y_start, pword.y_end) for pword in self.placed_words])
+        x_offset = min_x
+        y_offset = min_y
+        self.x_size = max_x - min_x
+        self.y_size = max_y - min_y
+        self.grid = []
+        print(self.x_size, self.y_size, x_offset, y_offset)
+        for y in range(self.y_size):
+            self.grid.append([])
+            for _ in range(self.x_size):
+                self.grid[y].append(" ")
+        new_pwords = self.placed_words[:]
+        self.placed_words = []
+        for pword in new_pwords:
+            pword.x_start -= x_offset
+            pword.x_end -= x_offset
+            pword.y_start -= y_offset
+            pword.y_end -= y_offset
+            print(pword)
+            self.insert_word(pword)
         """Resizes to minimum rectangular dimensions."""
+
+    def is_valid(self):
+        for pword in self.placed_words:
+            i = 0
+            if pword.orientation == WordOrientation.Horizontal:
+                # Check that the boundaries are not immediately followed by letters
+                # if self.grid[pword.y_start][pword.x_start - 1] != " ":
+                #     return False
+                # if self.grid[pword.y_start][pword.x_end + 1] != " ":
+                #     return False
+                for x in range(pword.x_start, pword.x_end):
+                    if not self.grid[pword.y_start][x] == pword.word[i]:
+                        return False
+                    i += 1
+            else:
+                # Check that the boundaries are not immediately followed by letters
+                # if self.grid[pword.x_start][pword.y_start - 1] != " ":
+                #     return False
+                # if self.grid[pword.x_start][pword.y_end + 1] != " ":
+                #     return False
+                for y in range(pword.y_start, pword.y_end):
+                    if not self.grid[y][pword.x_start] == pword.word[i]:
+                        return False
+                    i += 1
+        return True
 
     def _row_separator(self):
         s = ""
@@ -154,26 +202,29 @@ class CrossWordGame:
         self,
         word_picker: WordPicker,
         num_words=10,
+        max_pathes=100,
         seed_orientation=WordOrientation.Horizontal,
     ):
         self.grid: Optional[Grid] = None
         self.word_picker = word_picker
-        self.words = self.word_picker.pick_n_random_words(
-            num_words, max_length=10
-        )
+        self.words = self.word_picker.pick_n_random_words(num_words, max_length=10)
         self.word_graph = WordGraph(self.words)
-        self.word_graph.generate_all_pathes(max_pathes=10, randomized=True)
+        self.word_graph.generate_all_pathes(
+            max_pathes=max_pathes, max_iterations=1000, randomized=True
+        )
         self.generate_grid()
 
     def to_json(self):
+        raise NotImplementedError()
         return json.dumps({})
 
     def generate_grid(self):
         for path in self.word_graph.pathes:
             try:
                 g = self._node_links_to_grid(path)
-                if len(g.placed_words) == len(self.words):
+                if len(g.placed_words) == len(self.words) and self.grid.is_valid():
                     self.grid = g
+                    self.grid.resize_to_minimum_size()
                     return
             except GridConflictingCell as e:
                 print(e)
@@ -202,8 +253,7 @@ class CrossWordGame:
         while len(used_links) < len(links) and j < len(links):
             # Find a link that was not yet consumed
             # And that is connected to a word that is already in the grid.
-            j += 1            
-            print(len(used_links), len(links), words_in_grid)
+            j += 1
             for idx, link in enumerate(links):
                 if idx not in used_links:
                     if (
@@ -253,7 +303,6 @@ class CrossWordGame:
                             else WordOrientation.Vertical
                         )
                         new_word = link.origin_node.word
-                        print("Reversed addded", new_word)
                         if new_orientation == WordOrientation.Vertical:
                             new_x_start = previous_word.x_start + link.index_b
                             new_x_end = new_x_start
@@ -277,33 +326,6 @@ class CrossWordGame:
                         self.grid.insert_word(new_word_in_grid)
                         words_in_grid[link.origin_node.word] = new_word_in_grid
         return g
-        # new_word = WordInGrid(
-        #     x_start=
-        # )
-
-    # def _expand_seed_with_backtracking(self):
-    #     seeded_word = self.placed_words[0]
-    #     y = seeded_word.y_start
-    #     i = 0
-    #     x = seeded_word.x_start
-    #     new_word = self.word_picker.pick_word_with_character(seeded_word.word[i])
-    #     match_j = -1
-    #     for j, c in enumerate(new_word):
-    #         if c == seeded_word.word[i]:
-    #             match_j = j
-    #             break
-    #     self.grid.insert_vertical_word_at_pos(new_word, x, y - match_j)
-    #     print("match_j", match_j)
-    #     word_in_grid = WordInGrid(
-    #         x_start=x,
-    #         x_end=x,
-    #         y_start=y-match_j,
-    #         y_end=(y - match_j) + len(new_word),
-    #         word=new_word,
-    #         hints=[],
-    #         orientation=WordOrientation.Vertical
-    #     )
-    #     self.placed_words.append(word_in_grid)
 
     def __repr__(self):
         return self.grid.__repr__()
@@ -453,7 +475,7 @@ class WordGraph:
         return s
 
     def generate_all_pathes(
-        self, max_pathes=100, ignore_visited=False, randomized=False
+        self, max_pathes=100, max_iterations=100, ignore_visited=False, randomized=False
     ) -> List[List[NodeLink]]:
         """
         Should generate all possible pathes.
@@ -469,7 +491,7 @@ class WordGraph:
         print("Starting search!")
         if randomized_search:
             fn = randomized_search
-            ignore_visited = 1000  # H4ckz
+            ignore_visited = max_iterations  # H4ckz, max iterations
         else:
             fn = search
         fn(
@@ -613,6 +635,7 @@ def randomized_search(
         end="\r",
     )
     while len(path_dict) < max_pathes and current_iteration < max_iterations:
+        current_iteration += 1
         input_node = random.choice(graph.nodes)
         if not input_node.visited:
             linkable_letter = random.choice(input_node.linkable_letters)
@@ -677,7 +700,7 @@ def path_to_string(path: List[NodeLink]):
 
 def generate() -> CrossWordGame:
     word_picker = WordPicker("../dictionary_builder/results/result.txt")
-    game = CrossWordGame(word_picker, num_words=6)
+    game = CrossWordGame(word_picker, num_words=6, max_pathes=10)
     return game
 
 

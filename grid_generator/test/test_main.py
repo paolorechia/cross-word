@@ -62,8 +62,6 @@ def test_generate():
                 for y in range(pword.y_start, pword.y_end):
                     assert game.grid.grid[y][pword.x_start] == pword.word[i]
                     i += 1
-        # assert False
-
 
 def test_build_wordgraph():
     input_list = ["anel", "animal", "ato"]
