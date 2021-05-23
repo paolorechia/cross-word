@@ -6,7 +6,7 @@ if __name__ == "__main__":
         stop_word_offset=0,
         most_frequents=100,
     )
-    game = CrossWordGame(word_picker, num_words=4, max_pathes=10)
+    game = CrossWordGame(word_picker, num_words=10, max_pathes=800)
     print("Got game...")
     print("Answer:")
     print(game)

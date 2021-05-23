@@ -9,6 +9,7 @@ import random
 
 from datetime import datetime
 from unidecode import unidecode
+import multiprocessing as mp
 
 
 @dataclass
@@ -239,13 +240,9 @@ class Grid:
                 x = pword.x_start
                 for y in range(pword.y_start, pword.y_end):
                     mask[y][x] = str(idx)
-        g = Grid(
-            x_size=self.x_size,
-            y_size=self.y_size
-        )
+        g = Grid(x_size=self.x_size, y_size=self.y_size)
         g.grid = mask
         return g
-
 
     def _row_separator(self):
         s = ""
@@ -289,11 +286,11 @@ class CrossWordGame:
     def get_hints(self):
         hints = []
         for pword in self.grid.placed_words:
-            available_hints = self.word_picker.word_dictionary.get_hints_for_word(pword.word)
-            chosen_hint = random.choice(available_hints)
-            hints.append(
-                (pword.order_number, chosen_hint)
+            available_hints = self.word_picker.word_dictionary.get_hints_for_word(
+                pword.word
             )
+            chosen_hint = random.choice(available_hints)
+            hints.append((pword.order_number, chosen_hint))
         return hints
 
     def get_mask(self):
@@ -307,13 +304,21 @@ class CrossWordGame:
             try:
                 i += 1
                 print(f"Iteration: {i}")
+                print("Picking random words...")
                 self.words = self.word_picker.pick_n_random_words(
                     self.num_words, max_length=6, min_length=4
                 )
+                print("Building word graph...")
+
                 self.word_graph = WordGraph(self.words)
-                self.word_graph.generate_all_pathes(
-                    max_pathes=self.max_pathes, max_iterations=1000, randomized=True
+                # self.word_graph.generate_all_pathes(
+                #     max_pathes=self.max_pathes, max_iterations=1000, randomized=True
+                # )
+                print("Finding pathes...")
+                self.word_graph.parallelized_generate_all_pathes(
+                    max_pathes=self.max_pathes, max_iterations=1000
                 )
+                print("Generating grid...")
                 self._generate_grid()
             except InvalidWordSetError:
                 print("Invalid grid :(")
@@ -635,6 +640,60 @@ class WordGraph:
             self.pathes.append(item)
         return complete_pathes
 
+    def parallelized_generate_all_pathes(
+        self, max_pathes=100, max_iterations=100, ignore_visited=False, threads=8
+    ) -> List[List[NodeLink]]:
+        """
+        Should generate all possible pathes.
+
+        Maybe implement as a WordPath
+        """
+
+        input_graph = deepcopy(self)
+        complete_pathes = {}
+        incomplete_pathes = {}
+        t0 = datetime.now()
+        pathes_for_one_root_node: Dict[str, List[NodeLink]] = {}
+        print("Starting search!")
+
+        queues = []
+        for i in range(threads):
+            queue = mp.Queue()
+            args = (
+                input_graph,
+                0,
+                [],
+                pathes_for_one_root_node,
+                set(),
+                len(input_graph.nodes) - 1,
+                queue,
+                max_pathes // threads,
+                max_iterations,
+            )
+            queues.append(queue)
+            p = mp.Process(target=parallelized_randomized_search, args=args)
+            p.start()
+            p.join()
+            print(f"Finished worker {i}")
+
+        super_result = {}
+        for i in range(threads):
+            result = queues[i].get()
+            super_result.update(result)
+        for key, path in super_result.items():
+            if len(path) == len(input_graph.nodes) - 1:
+                complete_pathes[key] = path
+            else:
+                incomplete_pathes[key] = path
+        t1 = datetime.now()
+        elapsed_time = t1 - t0
+        print(f"Elapsed time: {elapsed_time}")
+        print("Total complete pathes:", len(complete_pathes))
+        self.pathes = []
+        for _, item in complete_pathes.items():
+            self.pathes.append(item)
+        return complete_pathes
+
 
 def search(
     input_graph,
@@ -733,6 +792,32 @@ def search(
         # print("Out of choices, ended")
     # else:
     #     print("Skipping!")
+
+
+def parallelized_randomized_search(
+    input_graph,
+    current_iteration,
+    traversed_path: List[NodeLink],
+    path_dict,
+    linked_pairs,
+    target_len,
+    mp_queue,
+    max_pathes=10,
+    max_iterations=1000,
+):
+    print("Working started!")
+    randomized_search(
+        input_graph,
+        current_iteration,
+        traversed_path,
+        path_dict,
+        linked_pairs,
+        target_len,
+        max_pathes,
+        max_iterations,
+    )
+    mp_queue.put(path_dict)
+    print("Working ended!")
 
 
 def randomized_search(
