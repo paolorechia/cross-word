@@ -8,7 +8,7 @@ import json
 import random
 
 from datetime import datetime
-
+from unidecode import unidecode
 
 @dataclass
 class WordEntry:
@@ -16,6 +16,10 @@ class WordEntry:
     lemma: str
     upos: str
     feats: List[str]
+    ant: List[str]
+    syn: List[str]
+    sentences: List[str]
+    description: List[str]
 
     def get_hints_from_word(self):
         return ["TODO HINTS"]
@@ -26,7 +30,10 @@ class WordDictionary:
         self.words: List[WordEntry] = []
         self.hashmap = {}
         for word_dict in words_list:
+            if "status_code" in word_dict:
+                del word_dict["status_code"]
             word = WordEntry(**word_dict)
+            word.word = unidecode(word.word)
             self.words.append(word)
             self.hashmap[word.word] = word
 
@@ -45,6 +52,8 @@ class WordPicker:
         self.picked_words = set()
 
     def pick_n_random_words(self, num_words, max_length=10):
+        """Reset picked words and pick n words."""
+        self.picked_words = set()
         while len(self.picked_words) < num_words:
             self.pick_random_unique(max_length=max_length)
         return self.picked_words
@@ -136,7 +145,7 @@ class Grid:
         self.x_size = max_x - min_x
         self.y_size = max_y - min_y
         self.grid = []
-        print(self.x_size, self.y_size, x_offset, y_offset)
+        # print(self.x_size, self.y_size, x_offset, y_offset)
         for y in range(self.y_size):
             self.grid.append([])
             for _ in range(self.x_size):
@@ -148,7 +157,7 @@ class Grid:
             pword.x_end -= x_offset
             pword.y_start -= y_offset
             pword.y_end -= y_offset
-            print(pword)
+            # print(pword)
             self.insert_word(pword)
         """Resizes to minimum rectangular dimensions."""
 
@@ -187,6 +196,7 @@ class Grid:
         return s
 
     def __repr__(self):
+        print(self.x_size, self.y_size)
         s = self._row_separator()
         for row in self.grid:
             for cell in row:
@@ -210,52 +220,78 @@ class CrossWordGame:
     ):
         self.grid: Optional[Grid] = None
         self.word_picker = word_picker
-        self.words = self.word_picker.pick_n_random_words(num_words, max_length=10)
-        self.word_graph = WordGraph(self.words)
-        self.word_graph.generate_all_pathes(
-            max_pathes=max_pathes, max_iterations=1000, randomized=True
-        )
-        self.generate_grid()
+        self.num_words = num_words
+        self.max_pathes = max_pathes
+        self.generate_game()
 
     def to_json(self):
         raise NotImplementedError()
         return json.dumps({})
 
-    def generate_grid(self):
+    def generate_game(self):
+        max_iterations = 100
+        i = 0
+        print("Generating game...")
+        while i < max_iterations and not self.grid:
+            try:
+                i += 1
+                print(f"Iteration: {i}")
+                self.words = self.word_picker.pick_n_random_words(
+                    self.num_words, max_length=6
+                )
+                self.word_graph = WordGraph(self.words)
+                self.word_graph.generate_all_pathes(
+                    max_pathes=self.max_pathes, max_iterations=1000, randomized=True
+                )
+                self._generate_grid()
+            except InvalidWordSetError:
+                print("Invalid grid :(")
+                pass
+        if self.grid:
+            print("Generated Successfully!")
+            return
+        print(f"Failed to generate game after {max_iterations} tries.")
+
+    def _generate_grid(self):
         current_grid = None
-        for path in self.word_graph.pathes:
+        print("Generating grid...")
+        for idx, path in enumerate(self.word_graph.pathes):
+            print(f"Trying path: {idx}")
             try:
                 g = self._node_links_to_grid(path)
+                # print(g.placed_words, self.words)
                 if len(g.placed_words) == len(self.words) and g.is_valid():
+                    print("Valid path!")
+                    # print("Pre-resize:", g.x_size, g.y_size)
                     g.resize_to_minimum_size()
-                    if not current_grid:
+                    # print("Resized:", g.x_size, g.y_size)
+                    if not current_grid and g:
                         current_grid = g
                     else:
                         if g.area() < current_grid.area():
                             current_grid = g
             except GridConflictingCell as e:
-                print(e)
+                pass
         if current_grid:
             self.grid = current_grid
             return current_grid
         raise InvalidWordSetError("Invalid word set/pathes, could not create a grid.")
 
     def _node_links_to_grid(self, links: List[any]):
-        g = Grid(30, 30)
-        self.grid = g
+        grid = Grid(1000, 1000)
         # Take first link and use it to seed the Grid
         node_link: NodeLink = links[0]
         raw_word = node_link.origin_node.word
         word_in_grid = WordInGrid(
-            x_start=(self.grid.x_size - len(raw_word)) // 2,
-            x_end=((self.grid.x_size - len(raw_word)) // 2) + len(raw_word),
-            y_start=(self.grid.x_size // 2),
-            y_end=(self.grid.x_size // 2),
+            x_start=(grid.x_size - len(raw_word)) // 2,
+            x_end=((grid.x_size - len(raw_word)) // 2) + len(raw_word),
+            y_start=(grid.x_size // 2),
+            y_end=(grid.x_size // 2),
             hints=[],
             word=raw_word,
             orientation=WordOrientation.Horizontal,
         )
-        self.grid.insert_word(word_in_grid)
+        grid.insert_word(word_in_grid)
         words_in_grid = {node_link.origin_node.word: word_in_grid}
         used_links = set()
         # Insert remainining links.
@@ -299,7 +335,7 @@ class CrossWordGame:
                             word=new_word,
                             orientation=new_orientation,
                         )
-                        self.grid.insert_word(new_word_in_grid)
+                        grid.insert_word(new_word_in_grid)
                         words_in_grid[link.target_node.word] = new_word_in_grid
                     elif (
                         link.target_node.word in words_in_grid
@@ -333,9 +369,9 @@ class CrossWordGame:
                             word=new_word,
                             orientation=new_orientation,
                         )
-                        self.grid.insert_word(new_word_in_grid)
+                        grid.insert_word(new_word_in_grid)
                         words_in_grid[link.origin_node.word] = new_word_in_grid
-        return g
+        return grid
 
     def __repr__(self):
         return self.grid.__repr__()
@@ -644,7 +680,9 @@ def randomized_search(
         f"{len(path_dict)} total pathes found in iteration {current_iteration}.",
         end="\r",
     )
-    while len(path_dict) < max_pathes and current_iteration < max_iterations:
+    while len(path_dict) < max_pathes:
+        if current_iteration > max_iterations:
+            break
         current_iteration += 1
         input_node = random.choice(graph.nodes)
         if not input_node.visited:
@@ -673,10 +711,10 @@ def randomized_search(
                             for link_ in links_:
                                 link_.used = True
                     if len(current_path) == target_len:
-                        print(
-                            f"Found a complete path at length: {len(path_dict)}",
-                            end="\r",
-                        )
+                        # print(
+                        #     f"Found a complete path at length: {len(path_dict)}",
+                        #     end="\r",
+                        # )
                         path_to_key = path_to_string(current_path)
                         path_dict[path_to_key] = current_path
                         return
@@ -708,9 +746,10 @@ def path_to_string(path: List[NodeLink]):
     return "--".join([str(p) for p in path])
 
 
-def generate() -> CrossWordGame:
+def generate(num_words=3, max_pathes=10) -> CrossWordGame:
     word_picker = WordPicker("../dictionary_builder/results/result.txt")
-    game = CrossWordGame(word_picker, num_words=3, max_pathes=10)
+    game = CrossWordGame(word_picker, num_words=num_words, max_pathes=max_pathes)
+    print(game)
     return game
 
 
