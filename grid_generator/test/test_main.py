@@ -55,13 +55,14 @@ def test_generate():
             if pword.orientation == WordOrientation.Horizontal:
                 assert pword.y_start == pword.y_end
                 for x in range(pword.x_start, pword.x_end):
-                    game.grid[pword.y_start][x] == pword.word[i]
+                    game.grid.grid[pword.y_start][x] == pword.word[i]
                     i += 1
             else:
                 assert pword.x_start == pword.x_end
                 for y in range(pword.y_start, pword.y_end):
-                    assert game.grid[y][pword.x_start] == pword.word[i]
+                    assert game.grid.grid[y][pword.x_start] == pword.word[i]
                     i += 1
+        assert False
 
 
 def test_build_wordgraph():

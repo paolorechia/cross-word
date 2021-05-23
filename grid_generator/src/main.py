@@ -92,6 +92,7 @@ class Grid:
                 self.grid[y].append(" ")
 
     def insert_word(self, word_in_grid):
+        print("Inserting ", word_in_grid)
         if word_in_grid.orientation == WordOrientation.Horizontal:
             self.insert_horizontal_word(word_in_grid)
         else:
@@ -105,7 +106,7 @@ class Grid:
 
     def insert_vertical_word(self, word_in_grid):
         for idx, w in enumerate(word_in_grid.word):
-            self.grid[word_in_grid.y_start + idx][word_in_grid.y_start] = w
+            self.grid[word_in_grid.y_start + idx][word_in_grid.x_start] = w
         self.placed_words.append(word_in_grid)
 
     def resize_to_minimum_size(self):
@@ -145,15 +146,16 @@ class CrossWordGame:
         self.word_graph = WordGraph(self.words)
         self.word_graph.generate_all_pathes(max_pathes=10, randomized=True)
         print(self.word_graph.pathes[0])
-        self.word_path_to_grid(self.word_graph.pathes[0])
+        self.node_links_to_grid(self.word_graph.pathes[0])
 
     def to_json(self):
         return json.dumps({})
 
-    def word_path_to_grid(self, word_path: List[any]):
+    def node_links_to_grid(self, links: List[any]):
         g = Grid(30, 30)
         self.grid = g
-        node_link: NodeLink = word_path[0]
+        # Take first link and use it to seed the Grid
+        node_link: NodeLink = links[0]
         raw_word = node_link.origin_node.word
         word_in_grid = WordInGrid(
             x_start=(self.grid.x_size - len(raw_word)) // 2,
@@ -165,41 +167,83 @@ class CrossWordGame:
             orientation=WordOrientation.Horizontal,
         )
         self.grid.insert_word(word_in_grid)
-        previous_word = word_in_grid
-        new_orientation = (
-            WordOrientation.Horizontal
-            if previous_word.orientation == WordOrientation.Vertical
-            else WordOrientation.Vertical
-        )
-        new_word = node_link.target_node.word
-        print(new_word)
-        if new_orientation == WordOrientation.Vertical:
-            new_x_start = node_link.index_a
-            new_x_end = node_link.index_a
-            new_y_start = previous_word.y_start - node_link.index_b
-            new_y_end = new_y_start + len(new_word)
-        else:
-            new_x_start = previous_word.x_start - node_link.index_b
-            new_x_end = new_x_start + len(new_word)
-            new_y_start = node_link.index_a
-            new_y_end = node_link.index_a
+        words_in_grid = {node_link.origin_node.word: word_in_grid}
+        used_links = set()
+        # Insert remainining links.
+        while len(used_links) < len(links):
+            # Find a link that was not yet consumed
+            # And that is connected to a word that is already in the grid.
+            print(len(used_links), len(links), words_in_grid)
+            for idx, link in enumerate(links):
+                if idx not in used_links:
+                    if link.origin_node.word in words_in_grid and link.target_node.word not in words_in_grid:
+                        # Add link words to grid
+                        used_links.add(idx)
+                        previous_word = words_in_grid[link.origin_node.word]
+                        new_orientation = (
+                            WordOrientation.Horizontal
+                            if previous_word.orientation == WordOrientation.Vertical
+                            else WordOrientation.Vertical
+                        )
+                        new_word = link.target_node.word
+                        if new_orientation == WordOrientation.Vertical:
+                            new_x_start = previous_word.x_start + link.index_a
+                            new_x_end = new_x_start
+                            new_y_start = previous_word.y_start - link.index_b
+                            new_y_end = new_y_start + len(new_word)
+                        else:
+                            new_x_start = previous_word.x_start - link.index_b
+                            new_x_end = new_x_start + len(new_word)
+                            new_y_start = previous_word.y_start + link.index_a
+                            new_y_end = new_y_start
 
-        new_word_in_grid = WordInGrid(
-            x_start=new_x_start,
-            x_end=new_x_end,
-            y_start=new_y_start,
-            y_end=new_y_end,
-            hints=[],
-            word=new_word,
-            orientation=new_orientation,
-        )
-        self.grid.insert_word(new_word_in_grid)
+                        new_word_in_grid = WordInGrid(
+                            x_start=new_x_start,
+                            x_end=new_x_end,
+                            y_start=new_y_start,
+                            y_end=new_y_end,
+                            hints=[],
+                            word=new_word,
+                            orientation=new_orientation,
+                        )
+                        self.grid.insert_word(new_word_in_grid)
+                        words_in_grid[link.target_node.word] = new_word_in_grid
+                    elif link.target_node.word in words_in_grid and link.origin_node.word not in words_in_grid:
+                        used_links.add(idx)
+                        previous_word = words_in_grid[link.target_node.word]
+                        new_orientation = (
+                            WordOrientation.Horizontal
+                            if previous_word.orientation == WordOrientation.Vertical
+                            else WordOrientation.Vertical
+                        )
+                        new_word = link.origin_node.word
+                        print("Reversed addded", new_word)
+                        if new_orientation == WordOrientation.Vertical:
+                            new_x_start = previous_word.x_start + link.index_b
+                            new_x_end = new_x_start
+                            new_y_start = previous_word.y_start - link.index_a
+                            new_y_end = new_y_start + len(new_word)
+                        else:
+                            new_x_start = previous_word.x_start - link.index_a
+                            new_x_end = new_x_start + len(new_word)
+                            new_y_start = previous_word.y_start + link.index_b
+                            new_y_end = new_y_start
+
+                        new_word_in_grid = WordInGrid(
+                            x_start=new_x_start,
+                            x_end=new_x_end,
+                            y_start=new_y_start,
+                            y_end=new_y_end,
+                            hints=[],
+                            word=new_word,
+                            orientation=new_orientation,
+                        )
+                        self.grid.insert_word(new_word_in_grid)
+                        words_in_grid[link.origin_node.word] = new_word_in_grid
 
         # new_word = WordInGrid(
         #     x_start=
         # )
-
-        """Insert a word path into a grid."""
 
     # def _expand_seed_with_backtracking(self):
     #     seeded_word = self.placed_words[0]
