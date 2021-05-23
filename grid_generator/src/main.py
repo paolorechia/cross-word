@@ -152,25 +152,28 @@ class Grid:
             self.insert_word(pword)
         """Resizes to minimum rectangular dimensions."""
 
+    def area(self):
+        return self.x_size * self.y_size
+
     def is_valid(self):
         for pword in self.placed_words:
             i = 0
             if pword.orientation == WordOrientation.Horizontal:
                 # Check that the boundaries are not immediately followed by letters
-                # if self.grid[pword.y_start][pword.x_start - 1] != " ":
-                #     return False
-                # if self.grid[pword.y_start][pword.x_end + 1] != " ":
-                #     return False
+                if self.grid[pword.y_start][pword.x_start - 1] != " ":
+                    return False
+                if self.grid[pword.y_start][pword.x_end + 1] != " ":
+                    return False
                 for x in range(pword.x_start, pword.x_end):
                     if not self.grid[pword.y_start][x] == pword.word[i]:
                         return False
                     i += 1
             else:
                 # Check that the boundaries are not immediately followed by letters
-                # if self.grid[pword.x_start][pword.y_start - 1] != " ":
-                #     return False
-                # if self.grid[pword.x_start][pword.y_end + 1] != " ":
-                #     return False
+                if self.grid[pword.x_start][pword.y_start - 1] != " ":
+                    return False
+                if self.grid[pword.x_start][pword.y_end + 1] != " ":
+                    return False
                 for y in range(pword.y_start, pword.y_end):
                     if not self.grid[y][pword.x_start] == pword.word[i]:
                         return False
@@ -219,15 +222,22 @@ class CrossWordGame:
         return json.dumps({})
 
     def generate_grid(self):
+        current_grid = None
         for path in self.word_graph.pathes:
             try:
                 g = self._node_links_to_grid(path)
-                if len(g.placed_words) == len(self.words) and self.grid.is_valid():
-                    self.grid = g
-                    self.grid.resize_to_minimum_size()
-                    return
+                if len(g.placed_words) == len(self.words) and g.is_valid():
+                    g.resize_to_minimum_size()
+                    if not current_grid:
+                        current_grid = g
+                    else:
+                        if g.area() < current_grid.area():
+                            current_grid = g
             except GridConflictingCell as e:
                 print(e)
+        if current_grid:
+            self.grid = current_grid
+            return current_grid
         raise InvalidWordSetError("Invalid word set/pathes, could not create a grid.")
 
     def _node_links_to_grid(self, links: List[any]):
@@ -700,7 +710,7 @@ def path_to_string(path: List[NodeLink]):
 
 def generate() -> CrossWordGame:
     word_picker = WordPicker("../dictionary_builder/results/result.txt")
-    game = CrossWordGame(word_picker, num_words=6, max_pathes=10)
+    game = CrossWordGame(word_picker, num_words=3, max_pathes=10)
     return game
 
 

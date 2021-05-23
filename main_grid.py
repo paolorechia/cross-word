@@ -11,4 +11,4 @@ if __name__ == "__main__":
         print(f"Testing subset of {len(subset)} words")
         graph = WordGraph(subset)
         graph.generate_all_pathes(max_pathes=100, max_iterations=1000, randomized=True)
-    # print(graph.pathes)
+    print(graph.pathes)
