@@ -204,20 +204,20 @@ class Grid:
             i = 0
             if pword.orientation == WordOrientation.Horizontal:
                 # Check that the boundaries are not immediately followed by letters
-                # if self.grid[pword.y_start][pword.x_start - 1] != " ":
-                #     return False
-                # if self.grid[pword.y_start][pword.x_end + 1] != " ":
-                #     return False
+                if self.grid[pword.y_start][pword.x_start - 1] != " ":
+                    return False
+                if self.grid[pword.y_start][pword.x_end + 1] != " ":
+                    return False
                 for x in range(pword.x_start, pword.x_end):
                     if not self.grid[pword.y_start][x] == pword.word[i]:
                         return False
                     i += 1
             else:
                 # Check that the boundaries are not immediately followed by letters
-                # if self.grid[pword.x_start][pword.y_start - 1] != " ":
-                #     return False
-                # if self.grid[pword.x_start][pword.y_end + 1] != " ":
-                #     return False
+                if self.grid[pword.x_start][pword.y_start - 1] != " ":
+                    return False
+                if self.grid[pword.x_start][pword.y_end + 1] != " ":
+                    return False
                 for y in range(pword.y_start, pword.y_end):
                     if not self.grid[y][pword.x_start] == pword.word[i]:
                         return False
@@ -271,12 +271,14 @@ class CrossWordGame:
         word_picker: WordPicker,
         num_words=10,
         max_pathes=100,
+        threads=8,
         seed_orientation=WordOrientation.Horizontal,
     ):
         self.grid: Optional[Grid] = None
         self.word_picker = word_picker
         self.num_words = num_words
         self.max_pathes = max_pathes
+        self.threads = threads
         self.generate_game()
 
     def to_json(self):
@@ -316,7 +318,9 @@ class CrossWordGame:
                 # )
                 print("Finding pathes...")
                 self.word_graph.parallelized_generate_all_pathes(
-                    max_pathes=self.max_pathes, max_iterations=1000
+                    max_pathes=self.max_pathes,
+                    max_iterations=1000,
+                    threads=self.threads,
                 )
                 print("Generating grid...")
                 self._generate_grid()
@@ -661,10 +665,6 @@ class WordGraph:
             queue = mp.Queue()
             args = (
                 deepcopy(input_graph),
-                0,
-                [],
-                deepcopy(pathes_for_one_root_node),
-                set(),
                 len(input_graph.nodes) - 1,
                 queue,
                 max_pathes // threads,
@@ -701,40 +701,53 @@ class WordGraph:
         return complete_pathes
 
 
-def search(
+def parallelized_randomized_search(
     input_graph,
-    input_node_idx: int,
-    traversed_path: List[NodeLink],
-    path_dict,
-    linked_pairs,
     target_len,
-    max_pathes=100,
-    ignore_visited=False,
+    mp_queue,
+    max_pathes=10,
+    max_iterations=1000,
 ):
-    graph = deepcopy(input_graph)
-    input_node = graph.nodes[input_node_idx]
-    print(f"Total pathes in iteration: {len(path_dict)}", end="\r")
-    if len(path_dict) >= max_pathes:
-        print(f"Reached max pathes: {len(path_dict)}", end="\r")
-        return
-    current_path = deepcopy(traversed_path)
-    if not input_node.visited:
-        for linkable_letter in input_node.linkable_letters:
-            if not linkable_letter.linked:
-                # print("FREE", linkable_letter, linkable_letter.links)
-                for link in linkable_letter.links:
-                    if ignore_visited and link.target_node.visited:
-                        continue
-                    if random.randint(0, 100) >= 50:
-                        continue
+    # print("Worker started!")
+    result = iterative_randomized_search(
+        input_graph,
+        target_len,
+        max_pathes,
+        max_iterations,
+    )
+    mp_queue.put(result)
+    # print("Worker ended!")
+
+
+def iterative_randomized_search(
+    input_graph,
+    target_len,
+    max_pathes=10,
+    max_iterations=1000,
+):
+    path_dict = {}
+    current_iteration = 0
+    while len(path_dict) < max_pathes and current_iteration < max_iterations:
+        print(
+            f"Number of pathes: {len(path_dict)}. Iteration: {current_iteration}",
+            end="\r",
+        )
+        graph = deepcopy(input_graph)
+        current_path: List[NodeLink] = []
+        linked_pairs = set()
+        current_iteration += 1
+        while len(current_path) < target_len:
+            input_node = random.choice(graph.nodes)
+            if not input_node.visited:
+                linkable_letter = random.choice(input_node.linkable_letters)
+                if linkable_letter.links and not linkable_letter.linked:
+                    link = random.choice(linkable_letter.links)
                     pair_to_link = [input_node.word, link.target_node.word]
                     pair_to_link.sort()
                     hsh = f"{pair_to_link[0]}_{pair_to_link[1]}"
                     if not link.used and hsh not in linked_pairs:
-                        current_path = deepcopy(traversed_path)
                         current_path.append(link)
-                        current_linked_pairs = deepcopy(linked_pairs)
-                        current_linked_pairs.add(hsh)
+                        linked_pairs.add(hsh)
                         input_node.visited = True
                         linkable_letter.linked = True
                         link.used = True
@@ -743,7 +756,6 @@ def search(
                         for letter, link_ in mirrored_links:
                             letter = True
                             link_.used = True
-                            # print("Flagging as mirrored", link_)
                         for letter in link.target_node.linkable_letters:
                             if (
                                 letter.char == link.char
@@ -751,157 +763,11 @@ def search(
                             ):
                                 links_ = letter.find_mutually_exclusive_links()
                                 for link_ in links_:
-                                    # print("Flagging as mutually exclusive", link_)
                                     link_.used = True
-                        new_node_idx = -1
-                        for idx, node in enumerate(graph.nodes):
-                            if node.word == link.target_node.word:
-                                new_node_idx = idx
-                        # print(new_node_idx)
                         if len(current_path) == target_len:
-                            print(
-                                f"Found a complete path at length: {len(path_dict)}",
-                                end="\r",
-                            )
                             path_to_key = path_to_string(current_path)
                             path_dict[path_to_key] = current_path
-                            return
-
-                        search(
-                            graph,
-                            new_node_idx,
-                            current_path,
-                            path_dict,
-                            current_linked_pairs,
-                            target_len,
-                            max_pathes,
-                            ignore_visited,
-                        )
-                        # Reset state for backtracking
-                        input_node.visited = False
-                        linkable_letter.linked = False
-                        link.used = False
-                        link.parent_letter.linked = False
-                        for letter, link_ in mirrored_links:
-                            letter = False
-                            link_.used = False
-                            # print("Flagging as mirrored", link_)
-                        for letter in link.target_node.linkable_letters:
-                            if (
-                                letter.char == link.char
-                                and letter.index == link.index_b
-                            ):
-                                links_ = letter.find_mutually_exclusive_links()
-                                for link_ in links_:
-                                    # print("Flagging as mutually exclusive", link_)
-                                    link_.used = False
-        # print("Out of choices, ended")
-    # else:
-    #     print("Skipping!")
-
-
-def parallelized_randomized_search(
-    input_graph,
-    current_iteration,
-    traversed_path: List[NodeLink],
-    path_dict,
-    linked_pairs,
-    target_len,
-    mp_queue,
-    max_pathes=10,
-    max_iterations=1000,
-):
-    # print("Worker started!")
-    randomized_search(
-        input_graph,
-        current_iteration,
-        traversed_path,
-        path_dict,
-        linked_pairs,
-        target_len,
-        max_pathes,
-        max_iterations,
-    )
-    mp_queue.put(path_dict)
-    # print("Worker ended!")
-
-
-def randomized_search(
-    input_graph,
-    current_iteration,
-    traversed_path: List[NodeLink],
-    path_dict,
-    linked_pairs,
-    target_len,
-    max_pathes=10,
-    max_iterations=1000,
-):
-    graph = deepcopy(input_graph)
-    current_path = deepcopy(traversed_path)
-    print(
-        f"{len(path_dict)} total pathes found in iteration {current_iteration}.",
-        end="\r",
-    )
-    while len(path_dict) < max_pathes:
-        if current_iteration > max_iterations:
-            break
-        current_iteration += 1
-        input_node = random.choice(graph.nodes)
-        if not input_node.visited:
-            linkable_letter = random.choice(input_node.linkable_letters)
-            if linkable_letter.links and not linkable_letter.linked:
-                link = random.choice(linkable_letter.links)
-                pair_to_link = [input_node.word, link.target_node.word]
-                pair_to_link.sort()
-                hsh = f"{pair_to_link[0]}_{pair_to_link[1]}"
-                if not link.used and hsh not in linked_pairs:
-                    current_path = deepcopy(traversed_path)
-                    current_path.append(link)
-                    current_linked_pairs = deepcopy(linked_pairs)
-                    current_linked_pairs.add(hsh)
-                    input_node.visited = True
-                    linkable_letter.linked = True
-                    link.used = True
-                    link.parent_letter.linked = True
-                    mirrored_links = linkable_letter.find_mirrored_links()
-                    for letter, link_ in mirrored_links:
-                        letter = True
-                        link_.used = True
-                    for letter in link.target_node.linkable_letters:
-                        if letter.char == link.char and letter.index == link.index_b:
-                            links_ = letter.find_mutually_exclusive_links()
-                            for link_ in links_:
-                                link_.used = True
-                    if len(current_path) == target_len:
-                        # print(
-                        #     f"Found a complete path at length: {len(path_dict)}",
-                        #     end="\r",
-                        # )
-                        path_to_key = path_to_string(current_path)
-                        path_dict[path_to_key] = current_path
-                        return
-                    randomized_search(
-                        graph,
-                        current_iteration + 1,
-                        current_path,
-                        path_dict,
-                        current_linked_pairs,
-                        target_len,
-                        max_pathes,
-                        max_iterations,
-                    )
-                    input_node.visited = False
-                    linkable_letter.linked = False
-                    link.used = False
-                    link.parent_letter.linked = False
-                    for letter, link_ in mirrored_links:
-                        letter = False
-                        link_.used = False
-                    for letter in link.target_node.linkable_letters:
-                        if letter.char == link.char and letter.index == link.index_b:
-                            links_ = letter.find_mutually_exclusive_links()
-                            for link_ in links_:
-                                link_.used = False
+    return path_dict
 
 
 def path_to_string(path: List[NodeLink]):
