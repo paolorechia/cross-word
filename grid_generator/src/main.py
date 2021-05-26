@@ -302,15 +302,20 @@ class CrossWordGame:
     def generate_game(self):
         self.grid = self._generate_game(self.max_pathes, threads=self.threads)
 
-    def parallelized_generate_game(self, threads=1):
+    def parallelized_generate_game(self, threads=8):
+        print("Picking random words...")
+        self.words = self.word_picker.pick_n_random_words(
+            self.num_words, max_length=8, min_length=4
+        )
         print(f"Running with {threads}")
         queues = []
         processes = []
 
+        threads_queue = mp.Queue()
         for i in range(threads):
             queue = mp.Queue()
             queues.append(queue)
-            args = (self.max_pathes // threads, queue)
+            args = (self.max_pathes // threads, queue, 1, threads_queue)
             p = mp.Process(target=self._generate_game, args=args)
             processes.append(p)
             print(f"Starting worker {i}")
@@ -328,19 +333,23 @@ class CrossWordGame:
             print(f"Finished worker {i}")
         self.grid = best_result
 
-    def _generate_game(self, max_pathes, mp_queue=None, threads=1):
+    def _generate_game(self, max_pathes, mp_queue=None, threads=1, threads_queue=None):
         max_iterations = 100
         i = 0
         print("Generating game...")
         grid = None
+        current_threads = threads
         while i < max_iterations and not grid:
             try:
                 i += 1
-                print(f"Iteration: {i}")
-                print("Picking random words...")
-                self.words = self.word_picker.pick_n_random_words(
-                    self.num_words, max_length=8, min_length=4
-                )
+                if threads_queue:
+                    try:
+                        is_thread_available = threads_queue.get_nowait()
+                        if is_thread_available:
+                            current_threads += 1
+                    except Exception:
+                        pass
+                print(f"Iteration: {i}, using threads {current_threads}")
                 print("Building word graph...")
 
                 self.word_graph = WordGraph(self.words)
@@ -348,7 +357,7 @@ class CrossWordGame:
                 self.word_graph.parallelized_generate_all_pathes(
                     max_pathes=max_pathes,
                     max_iterations=100000,
-                    threads=threads,
+                    threads=current_threads,
                 )
                 print("Generating grid...")
                 grid = self._generate_grid()
@@ -357,6 +366,8 @@ class CrossWordGame:
                 pass
         if grid:
             print("Generated Successfully!")
+            if threads_queue:
+                threads_queue.put_nowait(True)
             if mp_queue:
                 mp_queue.put(grid)
             return grid
