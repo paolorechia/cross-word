@@ -196,6 +196,7 @@ class Grid:
             self.insert_word(pword)
         """Resizes to minimum rectangular dimensions."""
 
+    @property
     def area(self):
         return self.x_size * self.y_size
 
@@ -279,7 +280,7 @@ class CrossWordGame:
         self.num_words = num_words
         self.max_pathes = max_pathes
         self.threads = threads
-        self.generate_game()
+        self.parallelized_generate_game(threads=self.threads)
 
     def to_json(self):
         raise NotImplementedError()
@@ -299,10 +300,40 @@ class CrossWordGame:
         return self.grid.get_mask()
 
     def generate_game(self):
+        self.grid = self._generate_game(self.max_pathes, threads=self.threads)
+
+    def parallelized_generate_game(self, threads=1):
+        print(f"Running with {threads}")
+        queues = []
+        processes = []
+
+        for i in range(threads):
+            queue = mp.Queue()
+            queues.append(queue)
+            args = (self.max_pathes // threads, queue)
+            p = mp.Process(target=self._generate_game, args=args)
+            processes.append(p)
+            print(f"Starting worker {i}")
+            p.start()
+
+        print("Collecting results...")
+        results = []
+        for i in range(threads):
+            result = queues[i].get()
+            results.append(result)
+
+        best_result = min([valid for valid in results if valid], key=(attrgetter("area")))
+        for i in range(threads):
+            processes[i].join()
+            print(f"Finished worker {i}")
+        self.grid = best_result
+
+    def _generate_game(self, max_pathes, mp_queue=None, threads=1):
         max_iterations = 100
         i = 0
         print("Generating game...")
-        while i < max_iterations and not self.grid:
+        grid = None
+        while i < max_iterations and not grid:
             try:
                 i += 1
                 print(f"Iteration: {i}")
@@ -313,30 +344,28 @@ class CrossWordGame:
                 print("Building word graph...")
 
                 self.word_graph = WordGraph(self.words)
-                # self.word_graph.generate_all_pathes(
-                #     max_pathes=self.max_pathes, max_iterations=1000, randomized=True
-                # )
                 print("Finding pathes...")
                 self.word_graph.parallelized_generate_all_pathes(
-                    max_pathes=self.max_pathes,
-                    max_iterations=1000,
-                    threads=self.threads,
+                    max_pathes=max_pathes,
+                    max_iterations=100000,
+                    threads=threads,
                 )
                 print("Generating grid...")
-                self._generate_grid()
+                grid = self._generate_grid()
             except InvalidWordSetError:
                 print("Invalid grid :(")
                 pass
-        if self.grid:
+        if grid:
             print("Generated Successfully!")
-            return
+            if mp_queue:
+                mp_queue.put(grid)
+            return grid
         print(f"Failed to generate game after {max_iterations} tries.")
 
     def _generate_grid(self):
         current_grid = None
         print("Generating grid...")
         for idx, path in enumerate(self.word_graph.pathes):
-            print(f"Trying path: {idx}")
             try:
                 g = self._node_links_to_grid(path)
                 # print(g.placed_words, self.words)
@@ -348,7 +377,7 @@ class CrossWordGame:
                     if not current_grid and g:
                         current_grid = g
                     else:
-                        if g.area() < current_grid.area():
+                        if g.area < current_grid.area:
                             current_grid = g
             except GridConflictingCell as e:
                 pass
@@ -732,16 +761,19 @@ def iterative_randomized_search(
             f"Number of pathes: {len(path_dict)}. Iteration: {current_iteration}",
             end="\r",
         )
-        graph = deepcopy(input_graph)
+        nodes = deepcopy(input_graph.nodes)
         current_path: List[NodeLink] = []
         linked_pairs = set()
         current_iteration += 1
-        while len(current_path) < target_len:
-            input_node = random.choice(graph.nodes)
-            if not input_node.visited:
-                linkable_letter = random.choice(input_node.linkable_letters)
+        while len(current_path) < target_len and nodes:
+            idx = random.randrange(0, len(nodes))
+            input_node = nodes.pop(idx)
+            if not input_node.visited and input_node.linkable_letters:
+                l_idx = random.randrange(0, len(input_node.linkable_letters))
+                linkable_letter = input_node.linkable_letters.pop(l_idx)
                 if linkable_letter.links and not linkable_letter.linked:
-                    link = random.choice(linkable_letter.links)
+                    llidx = random.randrange(0, len(linkable_letter.links))
+                    link = linkable_letter.links.pop(llidx)
                     pair_to_link = [input_node.word, link.target_node.word]
                     pair_to_link.sort()
                     hsh = f"{pair_to_link[0]}_{pair_to_link[1]}"
@@ -752,18 +784,6 @@ def iterative_randomized_search(
                         linkable_letter.linked = True
                         link.used = True
                         link.parent_letter.linked = True
-                        mirrored_links = linkable_letter.find_mirrored_links()
-                        for letter, link_ in mirrored_links:
-                            letter = True
-                            link_.used = True
-                        for letter in link.target_node.linkable_letters:
-                            if (
-                                letter.char == link.char
-                                and letter.index == link.index_b
-                            ):
-                                links_ = letter.find_mutually_exclusive_links()
-                                for link_ in links_:
-                                    link_.used = True
                         if len(current_path) == target_len:
                             path_to_key = path_to_string(current_path)
                             path_dict[path_to_key] = current_path
