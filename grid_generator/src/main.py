@@ -299,7 +299,7 @@ class CrossWordGame:
     def get_mask(self):
         return self.grid.get_mask()
 
-    def generate_game(self):
+    def generate_game(self, threads=1):
         self.grid = self._generate_game(self.max_pathes, threads=self.threads)
 
     def parallelized_generate_game(self, threads=8):
@@ -327,7 +327,9 @@ class CrossWordGame:
             result = queues[i].get()
             results.append(result)
 
-        best_result = min([valid for valid in results if valid], key=(attrgetter("area")))
+        best_result = min(
+            [valid for valid in results if valid], key=(attrgetter("area"))
+        )
         for i in range(threads):
             processes[i].join()
             print(f"Finished worker {i}")
@@ -344,12 +346,20 @@ class CrossWordGame:
                 i += 1
                 if threads_queue:
                     try:
+
                         is_thread_available = threads_queue.get_nowait()
                         if is_thread_available:
+                            print("Break early!!")
+                            threads_queue.put_nowait(is_thread_available)
+                            mp_queue.put(None)
+                            return None
                             current_threads += 1
                     except Exception:
                         pass
                 print(f"Iteration: {i}, using threads {current_threads}")
+                self.words = self.word_picker.pick_n_random_words(
+                    self.num_words, max_length=8, min_length=4
+                )
                 print("Building word graph...")
 
                 self.word_graph = WordGraph(self.words)
