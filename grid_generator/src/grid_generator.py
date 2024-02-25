@@ -605,50 +605,6 @@ class WordGraph:
             s += str(node)
         return s
 
-    def generate_all_pathes(
-        self, max_pathes=100, max_iterations=100, ignore_visited=False, randomized=False
-    ) -> List[List[NodeLink]]:
-        """
-        Should generate all possible pathes.
-
-        Maybe implement as a WordPath
-        """
-
-        input_graph = deepcopy(self)
-        complete_pathes = {}
-        incomplete_pathes = {}
-        t0 = datetime.now()
-        pathes_for_one_root_node: Dict[str, List[NodeLink]] = {}
-        print("Starting search!")
-        if randomized_search:
-            fn = randomized_search
-            ignore_visited = max_iterations  # H4ckz, max iterations
-        else:
-            fn = search
-        fn(
-            input_graph,
-            0,
-            [],
-            pathes_for_one_root_node,
-            set(),
-            len(input_graph.nodes) - 1,
-            max_pathes,
-            ignore_visited,
-        )
-        for key, path in pathes_for_one_root_node.items():
-            if len(path) == len(input_graph.nodes) - 1:
-                complete_pathes[key] = path
-            else:
-                incomplete_pathes[key] = path
-        t1 = datetime.now()
-        elapsed_time = t1 - t0
-        print(f"Elapsed time: {elapsed_time}")
-        print("Total complete pathes:", len(complete_pathes))
-        self.pathes = []
-        for _, item in complete_pathes.items():
-            self.pathes.append(item)
-        return complete_pathes
-
     def parallelized_generate_all_pathes(
         self, max_pathes=100, max_iterations=100, ignore_visited=False, threads=8
     ) -> List[List[NodeLink]]:
