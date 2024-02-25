@@ -19,32 +19,7 @@ class WordEntry:
     upos: str
     freq: int
     feats: List[str]
-    ant: List[str]
-    syn: List[str]
-    sentences: List[str]
     description: List[str]
-
-    def get_hints_for_word(self):
-        hints = []
-        if self.ant:
-            hints.append(("ANTONYMS", self.ant))
-        if self.syn:
-            hints.append(("SYNONYMS", self.syn))
-        if self.sentences:
-            for s in self.sentences:
-                if s:
-                    if self.word in s.lower():
-                        s2 = re.sub(self.word, "__", s.lower())
-                        hints.append(("SENTENCE", s2))
-                else:
-                    hints.append(("SENTENCE", s))
-        # TODO: fix dataset to include decent descriptions
-        # if self.description:
-        #     for d in self.description:
-        #         if s:
-        #             d2 = re.sub(self.word, "__", d.lower())
-        #             hints.append(("DESCRIPTION", d2))
-        return hints
 
 
 class WordDictionary:
@@ -60,10 +35,6 @@ class WordDictionary:
         self.hashmap = {}
         for word in self.words:
             self.hashmap[word.word] = word
-
-    def get_hints_for_word(self, word):
-        word_entry = self.hashmap[word]
-        return word_entry.get_hints_for_word()
 
     def to_unique_list(self):
         s = set()
@@ -93,7 +64,6 @@ class WordPicker:
             picked in self.picked_words
             or len(picked) > max_length
             or len(picked) < min_length
-            or not self.word_dictionary.get_hints_for_word(picked)
         ):
             rand_int = random.randint(0, len(self.unique_words) - 1)
             picked = self.unique_words[rand_int]
@@ -118,7 +88,6 @@ class WordInGrid:
     x_end: int
     y_start: int
     y_end: int
-    hints: List[str]
     word: str
     order_number: int = None
     orientation: WordOrientation = WordOrientation.Horizontal
@@ -286,16 +255,6 @@ class CrossWordGame:
         raise NotImplementedError()
         return json.dumps({})
 
-    def get_hints(self):
-        hints = []
-        for pword in self.grid.placed_words:
-            available_hints = self.word_picker.word_dictionary.get_hints_for_word(
-                pword.word
-            )
-            chosen_hint = random.choice(available_hints)
-            hints.append((pword.order_number, chosen_hint))
-        return hints
-
     def get_mask(self):
         return self.grid.get_mask()
 
@@ -417,7 +376,6 @@ class CrossWordGame:
             x_end=((grid.x_size - len(raw_word)) // 2) + len(raw_word),
             y_start=(grid.x_size // 2),
             y_end=(grid.x_size // 2),
-            hints=[],
             word=raw_word,
             orientation=WordOrientation.Horizontal,
         )
@@ -461,7 +419,6 @@ class CrossWordGame:
                             x_end=new_x_end,
                             y_start=new_y_start,
                             y_end=new_y_end,
-                            hints=[],
                             word=new_word,
                             orientation=new_orientation,
                         )
@@ -495,7 +452,6 @@ class CrossWordGame:
                             x_end=new_x_end,
                             y_start=new_y_start,
                             y_end=new_y_end,
-                            hints=[],
                             word=new_word,
                             orientation=new_orientation,
                         )

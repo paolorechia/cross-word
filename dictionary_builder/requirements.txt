@@ -1,3 +1,2 @@
-aiohttp
-asyncio
-scrapy
+stanza
+nltk
