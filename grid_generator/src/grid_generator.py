@@ -17,9 +17,7 @@ class WordEntry:
     word: str
     lemma: str
     upos: str
-    freq: int
     feats: List[str]
-    description: List[str]
 
 
 class WordDictionary:
@@ -28,10 +26,11 @@ class WordDictionary:
         for word_dict in words_list:
             if "status_code" in word_dict:
                 del word_dict["status_code"]
+            print(word_dict)
             word = WordEntry(**word_dict)
             word.word = unidecode(word.word)
             self.words.append(word)
-        self.words.sort(key=attrgetter("freq"), reverse=True)
+        # self.words.sort(key=attrgetter("freq"), reverse=True)
         self.hashmap = {}
         for word in self.words:
             self.hashmap[word.word] = word
@@ -44,7 +43,7 @@ class WordDictionary:
 
 
 class WordPicker:
-    def __init__(self, filename, most_frequents=10000, stop_word_offset=200):
+    def __init__(self, filename, most_frequents=20000, stop_word_offset=200):
         with open(filename, "r") as fp:
             self.word_dictionary: WordDictionary = WordDictionary(json.load(fp))
         self.unique_words = self.word_dictionary.to_unique_list()

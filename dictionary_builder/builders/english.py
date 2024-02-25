@@ -1,7 +1,9 @@
+from tqdm import tqdm
 
 def run():
     import json
     import nltk
+    import stanza
     from collections import Counter
     import pathlib
 
@@ -30,3 +32,23 @@ def run():
     output_filepath = (pathlib.Path(data_dir) / "gutenberg.json").resolve() 
     with open(output_filepath, "w") as fp:
         json.dump(frequent_words, fp, indent=4)
+
+    nlp = stanza.Pipeline('en')
+
+    processed = []
+    for key, freq in tqdm(frequent_words.items()):
+        doc = nlp(key)
+        for sentence in doc.sentences:
+            for word in sentence.words:
+                obj = {
+                    "word": key,
+                    "lemma": word.lemma,
+                    "upos": word.upos,
+                    "feats": word.feats,
+                    "freq": freq,
+                }
+                processed.append(obj)
+
+    output_filepath = (pathlib.Path(data_dir) / "dictionary_en.json").resolve() 
+    with open(output_filepath, "w", encoding="utf-8") as fp:
+        json.dump(processed, fp)

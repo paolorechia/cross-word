@@ -4,13 +4,11 @@ from operator import attrgetter
 
 from copy import deepcopy
 import json
-from grid_generator.src.main import (
+from grid_generator.src.grid_generator import (
     generate,
     CrossWordGame,
     WordGraph,
     WordOrientation,
-    search,
-    path_to_string,
 )
 
 sample_json_word_dict = [
