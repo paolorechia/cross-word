@@ -1,7 +1,7 @@
 ## Generating a Cross-Word
 ```bash
 pip install -r grid_generator/requirements.txt
-python -m grid_generator
+python -m grid_generator <lang-code>
 ```
 
 

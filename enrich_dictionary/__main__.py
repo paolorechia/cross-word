@@ -14,3 +14,10 @@ if __name__ == "__main__":
     
     Supported languages: {supported_languages.keys()}
 """)
+    language = sys.argv[1]
+    try:
+        enricher = supported_languages[language]
+    except KeyError as exc:
+        raise KeyError(f"Unsupported language: {language}") from exc
+
+    enricher.run()
