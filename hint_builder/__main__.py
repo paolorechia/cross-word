@@ -1,21 +1,19 @@
 import sys
 
-from dictionary_builder.builders import english, portuguese
+from hint_builder.builders import english
 
 
 supported_languages = {
      "en": english,
-     "pt": portuguese,
 }
 
 
 if __name__ == "__main__":
+
     if len(sys.argv) < 2:
         sys.exit(f"""Usage: {sys.argv[0]} [language-code]
     
-    Supported languages:
-        * en (English)
-        * pt (Portugese)               
+    Supported languages: {supported_languages.keys()}
 """)
     
     language = sys.argv[1]

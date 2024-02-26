@@ -1,0 +1,4 @@
+transformers==4.30.2
+accelerate==0.17.1
+guidance==0.0.64
+bitsandbytes==0.42.0
