@@ -14,7 +14,7 @@ if __name__ == "__main__":
     assert lang in available_languages, f"{lang} not in {available_languages}"
 
     word_picker = WordPicker(
-        f"data/dictionary_{lang}.json",
+        f"data/enriched_dictionary_{lang}.json",
         stop_word_offset=0,
         most_frequents=1000,
     )
@@ -28,9 +28,5 @@ if __name__ == "__main__":
 
     print("Hints")
     hints = game.get_hints()
-    for h in hints:
-        coord = h[0]
-        print(coord)
-        actual_hints = h[1]
-        for hint in actual_hints:
-            print(">>>> ", hint)
+    for hint in hints:
+        print(">>>> ", hint)

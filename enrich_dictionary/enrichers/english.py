@@ -17,7 +17,6 @@ def run():
         en_dictionary = {word["word"]: word for word in json.load(fp)}
 
 
-    print(en_dictionary.keys())
     for line in hints:
         if "=" not in line:
             continue
@@ -26,7 +25,7 @@ def run():
         hint = tmp[1]
 
         if word in en_dictionary:
-            enriched.append({**en_dictionary[word], "hint": hint.strip("\n")})
+            enriched.append({**en_dictionary[word], "hint": [hint.strip("\n")]})
 
 
     with open(output_path, "w", encoding="utf-8") as fp:

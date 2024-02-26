@@ -18,7 +18,7 @@ class WordEntry:
     lemma: str
     upos: str
     feats: List[str]
-
+    hint: str
 
 class WordDictionary:
     def __init__(self, words_list):
@@ -26,7 +26,6 @@ class WordDictionary:
         for word_dict in words_list:
             if "status_code" in word_dict:
                 del word_dict["status_code"]
-            print(word_dict)
             word = WordEntry(**word_dict)
             word.word = unidecode(word.word)
             self.words.append(word)
@@ -40,6 +39,9 @@ class WordDictionary:
         for word in self.words:
             s.add(word.word)
         return list(s)
+    
+    def __getitem__(self, key):
+        return self.hashmap[key]
 
 
 class WordPicker:
@@ -90,6 +92,7 @@ class WordInGrid:
     word: str
     order_number: int = None
     orientation: WordOrientation = WordOrientation.Horizontal
+
 
 
 class GridConflictingCell(Exception):
@@ -256,6 +259,15 @@ class CrossWordGame:
 
     def get_mask(self):
         return self.grid.get_mask()
+    
+
+    def get_hints(self):
+        hints = []
+        for pword in self.grid.placed_words:
+            available_hints = self.word_picker.word_dictionary[pword.word].hint
+            chosen_hint = random.choice(available_hints)
+            hints.append((pword.order_number, chosen_hint))
+        return hints
 
     def generate_game(self, threads=1):
         self.grid = self._generate_game(self.max_pathes, threads=self.threads)
