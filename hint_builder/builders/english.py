@@ -16,10 +16,14 @@ def run():
     program = guidance("""<s>[INST] You're an AI assistant help me build a cross-word puzzle.
 To make a good game, we need to give good hints to the player.
 For instance, given the word "horse", one might return the hint "Four-legged animal used throughly history as a mount".
-Help me by creating more hints, like this, following the example:
+Help me by creating more hints, hints should be separated by a newline.
+For example:
 
-horse=Four-legged animal used throughly history as a mount.[/INST]
-{{word}}={{gen 'description' stop="." max_tokens=64}}
+horse=Four-legged animal used throughly history as a mount.
+sun=Mass of glowing hot gases, the center of our solar system.
+                       
+[/INST]
+{{word}}={{gen 'description' stop="\n" max_tokens=32}}
 """)
     input_dictionary_path = (pathlib.Path.cwd() / "data" / "dictionary_en.json")
     with open(input_dictionary_path, "r") as fp:
